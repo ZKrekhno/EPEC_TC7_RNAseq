@@ -2,10 +2,8 @@
 title: "RUV-seq on polar infection"
 output: 
   html_notebook: 
-    fig_width: 12
-    fig_height: 10
-editor_options: 
-  chunk_output_type: console
+editor_options:
+  chunk_output_type: inline
 ---
 
 ```{r include=TRUE}
@@ -17,19 +15,26 @@ library(RUVSeq)
 library(EDASeq)
 library(DESeq2)
 library("ggvenn")
-theme_set(theme_bw(base_size = 27))
+library(ggprism)
+library(eulerr)
+library(rcartocolor)
+theme_set(theme_prism(base_size = 14))
 ```
 
+
+
+
 ```{r}
-counts <- read.table("all_reads_STAR", header = F, sep = "\t", stringsAsFactors = F)
+counts <- read.table(here::here("long_infection_human_reads/long_RNA_library/data/all_reads_STAR"), header = F, sep = "\t", stringsAsFactors = F)
 #Next manipulate the table to remove redundant columns and only keep relevant columns (1 columns with gene names, and the rest with counts for reverse stranded library)
 counts_simple <- counts %>% 
   dplyr::select(Gene_ID = V1, UI92 = V4, UI93 = V8, UI96 = V12, N92 = V16, N93 = V20, WT96 = V24, WT91 = V28, WT94 = V32, N95 = V36)
+#Filter really low expressed counts out
 filter <- apply(counts_simple [,2:10],1,function(x) mean(x)>5)
 counts_simple <- counts_simple [filter,]
 ```
 
-```{r edaseq}
+```{r edaseq, fig.width=8, fig.height=6}
 #Use EDAseq to normalize the libraries
 c_mat <- counts_simple %>% 
                      dplyr::select(-where(is.character)) %>% 
@@ -57,35 +62,40 @@ dataNorm <- betweenLaneNormalization(data, which="upper")
 dataOffset <- betweenLaneNormalization(data,
                                        which="upper",offset=TRUE)
 #Plot the counts 
-#pdf(here::here("final RUV figures/Normalization effect on the library.pdf"), width = 12, height = 10)
-graph_cols <- fct_recode(pData$genotype, "coral" = "UI","darkblue" = "WT", "forestgreen" = "N") %>% 
-  as.character()
-plotPCA(data, col = graph_cols, main = "Unnormalized counts")
-plotPCA(dataOffset, col = graph_cols, main = "Normalized counts")
-plotRLE(data, col = graph_cols, main = "RLE Unnormalized counts")
-plotRLE(dataOffset, col = graph_cols, main = "RLE Normalized counts")
-boxplot(data, main = "Unnormalized counts", col = graph_cols)
-boxplot(dataNorm, main = "Normalized counts", col = graph_cols)
+#pdf(here::here("long_infection_human_reads/long_RNA_library/results/final RUV figures/EDAseq_normalization.pdf"), width = 8, height = 6)
+pal_choice <- "Bold"
+pData <- pData %>% 
+  mutate(graph_cols  = case_when(
+    genotype == "UI" ~ carto_pal(12,pal_choice) [10],
+    genotype == "WT" ~ carto_pal(12,pal_choice) [2],
+    genotype == "N" ~ carto_pal(12,pal_choice) [1]
+  ))
+plotPCA(data, col = pData$graph_cols, main = "Unnormalized counts")
+plotPCA(dataOffset, col = pData$graph_cols, main = "Normalized counts")
+plotRLE(data, col = pData$graph_cols, main = "RLE Unnormalized counts")
+plotRLE(dataOffset, col = pData$graph_cols, main = "RLE Normalized counts")
+boxplot(data, main = "Unnormalized counts", col = pData$graph_cols)
+boxplot(dataNorm, main = "Normalized counts", col = pData$graph_cols)
 #dev.off()
 ```
 
 Try RUV-Seq. First confirm that library size normalization helps somewhat with data, but not enough for clear separation of genotypes
 
 Prepare the RUV-seq objects and perform RUVs normalization
-``` {r echo=TRUE, results = 'asis', include=TRUE}
+``` {r echo=TRUE, results = 'asis', include=TRUE, fig.width=8, fig.height=6}
 scidx <- matrix(data = c(str_subset(rownames(pData), "UI"),
                          str_subset(rownames(pData), "WT"),
                          str_subset(rownames(pData), "N")),  nrow = 3, byrow = T)
 cidx <- rownames(counts(data))
 rv1 <- RUVs(dataOffset, cidx, k=1, scidx, epsilon = 1, isLog = F)
 rv2 <- RUVs(dataOffset, cidx, k=2, scidx, epsilon = 1, isLog = F)
-#pdf(here::here("final RUV figures/Normalization effect on the library and RUV normalization.pdf"), width = 12, height = 10)
-plotPCA(dataOffset, col = graph_cols, main = "UQ normalized counts")
-plotPCA(rv1, col = graph_cols, main = "UQ normalized counts + RUVs with 1 k")
-plotPCA(rv2, col = graph_cols, main = "UQ normalized counts + RUVs with 2 k")
-plotRLE(dataOffset, col = graph_cols, main = "UQ normalized counts")
-plotRLE(rv1, col = graph_cols, main = "UQ normalized counts + RUVs with 1 k")
-plotRLE(rv2, col = graph_cols, main = "UQ normalized counts + RUVs with 2 k")
+#pdf(here::here("long_infection_human_reads/long_RNA_library/results/final RUV figures/Normalization effect on the library and RUV normalization.pdf"), width = 8, height = 6)
+plotPCA(dataOffset, col = pData$graph_cols, main = "UQ normalized counts")
+plotPCA(rv1, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 1 k")
+plotPCA(rv2, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 2 k")
+plotRLE(dataOffset, col = pData$graph_colss, main = "UQ normalized counts")
+plotRLE(rv1, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 1 k")
+plotRLE(rv2, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 2 k")
 #dev.off()
 ```
 #The RUV normalization is done, now we have normalization factors or weights, that can be fed into DESeq2
