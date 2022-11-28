@@ -1,0 +1,399 @@
+---
+title: "Final RUV-seq on stranded polar infection"
+output: 
+  html_notebook: 
+    fig_width: 12
+    fig_height: 10
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(include = TRUE)
+library(tidyverse)
+library(greekLetters)
+library(RUVSeq)
+library(EDASeq)
+library(DESeq2)
+library(PCAtools)
+library('org.Hs.eg.db')
+library(EnhancedVolcano)
+library(EGSEA)
+library(limma)
+library(pheatmap)
+theme_set(theme_bw(base_size = 33))
+```
+
+```{r}
+counts <- read.table("all_reads_STAR", header = F, sep = "\t", stringsAsFactors = F)
+#Next manipulate the table to remove redundant columns and only keep relevant columns (1 columns with gene names, and the rest with counts for reverse stranded library)
+counts_simple <- counts %>% 
+  dplyr::select(Gene_ID = V1, UI92 = V4, UI93 = V8, UI96 = V12, N92 = V16, N93 = V20, WT96 = V24, WT91 = V28, WT94 = V32, N95 = V36)
+filter <- apply(counts_simple [,2:10],1,function(x) mean(x)>5)
+counts_simple <- counts_simple [filter,]
+```
+
+Don't bother calculating mapping stats. These stay the same and so can just be reused from final clean figures folder.
+```{r edaseq}
+#Use EDAseq to normalize the libraries
+c_mat <- counts_simple %>% 
+                     dplyr::select(-where(is.character)) %>% 
+                     dplyr::slice(-1:-4) %>% 
+                     as.matrix()
+rownames(c_mat) <- counts_simple$Gene_ID [-1:-4]
+pData <- data.frame(genotype=vector(mode = "logical", length = ncol(c_mat)),
+                    timepoint = vector(mode = "logical", length = ncol(c_mat)),
+                    samples = colnames(c_mat),
+                    row.names = colnames(c_mat))
+pData <- pData %>% 
+  mutate(genotype = case_when(
+    str_detect(samples, "WT") ~ "WT",
+    str_detect(samples, "UI") ~ "UI",
+    str_detect(samples, "N") ~ "N"
+  ), timepoint = 9) %>%
+  dplyr::select(-samples)
+pData$group <- factor(paste0(pData$genotype,pData$timepoint))
+
+data <- newSeqExpressionSet(counts=c_mat,
+                            phenoData=pData)
+#Normalize the data next
+dataNorm <- betweenLaneNormalization(data, which="upper") 
+#For DE we will create this analysis with offset values
+dataOffset <- betweenLaneNormalization(data,
+                                       which="upper",offset=TRUE)
+```
+
+Apply RUV-seq normalization to the data
+``` {r ruv}
+#Prepare RUV-seq objects and apply RUVs
+scidx <- matrix(data = c(str_subset(rownames(pData), "UI"),
+                         str_subset(rownames(pData), "WT"),
+                         str_subset(rownames(pData), "N")),  nrow = 3, byrow = T)
+cidx <- rownames(counts(data))
+rv2 <- RUVs(dataOffset, cidx, k=2, scidx, epsilon = 1, isLog = F)
+graphcols <- graph_cols <- fct_recode(pData$genotype, "coral" = "UI","darkblue" = "WT", "forestgreen" = "N") %>% 
+  as.character()
+#Already have these figures, so no need reprinting these
+plotPCA(dataOffset, col = graph_cols, main = "UQ normalized counts")
+plotPCA(rv2, col = graph_cols, main = "UQ normalized counts + RUVs with 2 k")
+plotRLE(dataOffset, col = graph_cols, main = "UQ normalized counts")
+plotRLE(rv2, col = graph_cols, main = "UQ normalized counts + RUVs with 2 k")
+```
+
+``` {r dds}
+#Construct the DESeq object and indicate that RUV factors need to be accounted for in the design
+dds <- DESeqDataSetFromMatrix(countData = counts(rv2),
+                              colData = pData(rv2),
+                              design = ~  W_1 + W_2 + group)
+dds$group <- relevel(dds$group, ref = "UI9")
+normFactors <- exp(-1 * offst(dataOffset))
+normFactors <- normFactors / exp(rowMeans(log(normFactors)))
+normalizationFactors(dds) <- normFactors
+dds <- DESeq(dds)
+rld <- vst(dds)
+DESeq2::plotPCA(rld, intgroup = "group")
+#Use limma to actually remove these batch effects (DESEq2 only accounts for these, it does not )
+mat <- limma::removeBatchEffect(assay(rld),
+                                covariates = matrix(data = c(rld$W_1,rld$W_2), ncol = 2),
+                                design = model.matrix(~ group, colData(rld)))
+rld2.nobatch <- rld
+assay(rld2.nobatch) <- mat
+normal_PCA <- DESeq2::plotPCA(rld2.nobatch, returnData = T, intgroup = "group")
+png(here::here("final RUV figures/PCA plot of normalized counts legend bottom.png"), width = 12, height = 10,
+   units = "in", res = 720)
+ggplot(data = normal_PCA, aes(shape = pData$genotype, color = pData$genotype)) +
+  scale_color_manual(labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
+                                "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
+                     values = c("UI" = "coral","WT" = "darkblue", "N" = "forestgreen")) +
+  geom_point(mapping = aes(x = PC1, y = PC2), size = 5) +
+  labs(title = "RUVs corrected PCA plot", shape = "Infection", color = "Infection") +
+  scale_shape_manual(labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
+                                "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
+                     values = c("UI" = 15, "WT" = 16, "N" = 17)) +
+  theme(legend.position = "bottom")
+dev.off()
+```
+
+
+``` {r res}
+resWTvsUI <- results(dds, contrast = c("group","WT9", "UI9"))
+resWTvsN <- results(dds, contrast = c("group","WT9", "N9"))
+resNvsUI <- results(dds, contrast = c("group","N9", "UI9"))
+res <- list(resWTvsUI,resWTvsN,resNvsUI) %>% 
+  map(as.data.frame) %>% 
+  map(rownames_to_column, var = "rowname") %>% 
+  purrr::reduce(left_join, by = "rowname") %>% 
+  rename_with(function(x) str_replace(x,"$",".NvsUI"),
+              .cols = !matches("\\.[xy]")) %>% 
+  rename_with(function(x) ifelse(str_detect(x,"\\.x"),
+                                 str_replace(x,"\\.x",".WTvsUI"),
+                                 str_replace(x,"\\.y",".WTvsN")),
+              .cols = matches("\\.[xy]")) %>% 
+  rename_with(function(x) "Gene ID",1)
+map(list(resWTvsUI,resWTvsN,resNvsUI),summary)
+#write.table(res, here::here("final RUV figures/RUVs normalized results.txt"),
+ #           sep = "\t", row.names = F)
+```
+
+Next step is to analyze PCA loadings 
+Analyze loadings of the principal components in the data
+```{r pcatools}
+#Create a mapping for ID to symbol
+geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(rownames(counts(dds)), "\\.[1-9]([0-9])?", ""), 
+                  keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first")
+
+cnts <- assay(rld2.nobatch)
+#Confirm that that the mapping is correct
+all(str_replace_all(rownames(counts(dds)), "\\.[1-9]([0-9])?", "") == names(geneids))
+#Rename rows that had a symbol name
+newnames <- ifelse(is.na(geneids) | duplicated(geneids),
+    names(geneids), geneids)
+rownames(cnts) <- newnames
+p <- pca(cnts,colData(dds), removeVar = 0.1)
+p$metadata$genotype <- p$metadata$genotype %>% as.factor() %>% fct_relevel("N")
+p$metadata$group <- p$metadata$group %>% as.factor() %>% fct_relevel("N9")
+#pdf(here::here("final RUV figures/PCA tools analysis of PCA.pdf"), width = 12, height = 10)
+biplot(p, colby = "genotype", shape = "genotype", showLoadings = T,gridlines.major = FALSE)
+biplot(p, colby = "genotype", shape = "genotype",gridlines.major = FALSE)
+plotloadings(p,  rangeRetain = 0.01,
+    labSize = 4.0,
+    caption = "Top 1% variables")
+eigencorplot(p,
+             components = getComponents(p,c(1:9)),
+             metavars = c('group','genotype'))
+eigencorplot(p,
+             components = getComponents(p,1:9),
+    metavars = c('group','genotype'),
+    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
+    cexCorval = 2,
+    cexLabX = 1.8,
+    cexLabY = 1.8,
+    cexLabColKey = 1.8,
+    fontCorval = 2,
+    posLab = 'bottomleft',
+    rotLabX = 45,
+    scale = TRUE,
+    main = bquote(Principal ~ component ~ Pearson ~ r^2 ~ correlates),
+    plotRsquared = TRUE,
+    corFUN = 'pearson',
+    corUSE = 'pairwise.complete.obs',
+    corMultipleTestCorrection = 'BH',
+    signifSymbols = c('****', '***', '**', '*', ''),
+    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
+#dev.off()
+```
+Make volcano plots of differentially expressed genes
+```{r volcano}
+#shrink results
+resWTUIlfc <- lfcShrink(dds, coef="group_WT9_vs_UI9", type="apeglm", res = resWTvsUI)
+resNUIlfc <- lfcShrink(dds, coef="group_N9_vs_UI9", type="apeglm", res = resNvsUI)
+#Get results for WTvs EscN
+dds.N <- dds
+dds.N$group <- relevel(dds.N$group, ref= "N9")
+dds.N <- DESeq(dds.N)
+resWTvsN <- results(dds.N, contrast = c("group","WT9", "N9"))
+resWTNlfc <- lfcShrink(dds.N, coef="group_WT9_vs_N9", type="apeglm", res = resWTvsN)
+#Create a mapping for ID to symbol
+geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(rownames(resWTNlfc), "\\.[1-9]([0-9])?", ""), 
+                  keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first") %>% 
+  as.data.frame() %>% 
+  bind_cols(rownames(resWTNlfc)) %>% 
+  dplyr::select("symbol" = 1, "rowname" = `...2`)
+#Get nice names or keep ensembl IDs
+naOrDup <- is.na(geneids$symbol) | duplicated(geneids$symbol)
+geneids$gene_name <- ifelse(naOrDup, rownames(geneids), geneids$symbol)
+#identify top20 genes for each comparison
+id_top <- function(x) {
+  x %>% 
+  as.data.frame() %>% 
+  arrange(padj) %>% 
+  dplyr::slice(1:20) %>% 
+  rownames_to_column(var = "rowname") %>% 
+  left_join(geneids) }
+top_list <- list("WTN" = resWTNlfc,"WTUI" = resWTUIlfc, "NUI" = resNUIlfc) %>% 
+  map(id_top)
+results_list <- list(resWTNlfc,resWTUIlfc,resNUIlfc)
+#Replace the rownames with gene names
+for (i in 1:3) {rownames(results_list [[i]]) <- geneids$gene_name}
+#pdf(here::here("final RUV figures/Volcano plots.pdf"), width = 12, height = 10)
+DESeq2::plotMA(resWTvsN, main = paste0("WT infection vs ", greeks("Delta"),  "EscN infection\nResults without shrinking"))
+DESeq2::plotMA(resWTNlfc, main = paste0("WT infection vs ", greeks("Delta"),  "EscN infection\nResults after apeglm shrinking"))
+DESeq2::plotMA(resWTvsUI, main = "WT infection vs uninfected cells \nResults without shrinking")
+DESeq2::plotMA(resWTUIlfc, main = "WT infection vs uninfected cells \nResults after apeglm shrinking")
+
+#Create a wrapper function for enhancedvolcano to plot all the graphs
+volcano_with_labels <- function(res_obj,select_lab = "",title) {
+  EnhancedVolcano(res_obj,
+    lab = rownames(res_obj),
+    selectLab = select_lab,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    title = title,
+    pointSize = 3,
+    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
+    legendPosition = 'bottom',
+    subtitle = NULL,
+    pCutoff = 0.05,
+    FCcutoff = 0.6,
+    labSize = 6.0,
+                boxedLabels = T, labCol = 'black',
+               labFace = 'bold',
+                drawConnectors = T, widthConnectors = 1.0,
+               colConnectors = 'black')
+}
+titles <- list(paste0("Differentially expressed genes between WT and ",greeks("Delta"),"EscN infected cells"),
+               paste0("Differentially expressed genes between WT and UI cells"),
+               paste0("Differentially expressed genes between",greeks("Delta"),"EscN infected and uninfected cells"))
+for (i in 1:3) {
+  volcano_with_labels(results_list[[i]],title = titles [[i]]) %>% print()
+  volcano_with_labels(results_list[[i]],select_lab = top_list [[i]]$gene_name,title = titles [[i]]) %>% print()
+}
+#dev.off()
+```
+
+Create a heatmap of top differentially expressed genes
+```{r heatmap, eval=FALSE}
+heat_mat <- assay(rld2.nobatch)
+rownames(heat_mat) <- geneids$gene_name
+topVarGenes <- head(order(-rowVars(heat_mat)),20)
+mat <- heat_mat [ topVarGenes, ]
+mat <- mat - rowMeans(mat)
+#For some reason fct_recode did not want to work the delta sign, so had to work around it
+df <- as.data.frame(colData(rld)) %>% 
+  dplyr::select(genotype) %>% 
+  transmute(`Infection status` = fct_recode(genotype, "T3SS-deficient EPEC" = "N",
+                                            "Wild-type EPEC" = "WT","Uninfected" = "UI")) 
+
+pheatmap(mat, annotation_col=df, fontsize = 22)
+```
+
+
+
+Apply EGSEA to differentially expressed data
+
+```{r eggsea-prep}
+#First 0 means no intercept. 
+design_matrix <- model.matrix(~0+W_1+W_2+group,pData(rv2)) 
+colnames(design_matrix) <- colnames(design_matrix) %>% str_remove("group")
+names_for_contr <- resultsNames(dds) [-1] %>%
+  str_replace_all("group_","") %>% 
+  str_replace_all("_vs_","-")
+names_for_contr [length(names_for_contr)+1] <- "WT9-N9"
+names_for_contr <- names_for_contr [!(names_for_contr %in% c("W_1","W_2"))]
+contrast_obj <- makeContrasts(contrasts = names_for_contr, levels = colnames(design_matrix))
+group_obj <- as.factor(pData$group)
+cnt_obj <- dataNorm@assayData$normalizedCounts
+#finally prepare the geneID mapping tool
+geneids <- mapIds(org.Hs.eg.db, keys = str_replace(rownames(cnt_obj), "\\.[1-9]([0-9])?", ""), keytype = "ENSEMBL", column = "ENTREZID", multiVals = "first")
+
+#Replace the rownames of the count matrix with ENTREZ ID
+rownames(cnt_obj) <- unname(geneids)
+#Remove NAs from the matrix (not every gene had an NCBI match)
+cnt_obj_filt <- cnt_obj [!is.na(rownames(cnt_obj)),] 
+#Deal with the remaining duplicates
+dupes <-  c(which(duplicated(rownames(cnt_obj_filt)) | duplicated(rownames(cnt_obj_filt),fromLast = T)))
+means <- data.frame(matrix(nrow = length(dupes))) %>% mutate(index = dupes)
+#Select the duplicate with higher gene count
+for (i in 1:length(dupes)) {
+  means$avg [i] <- mean(cnt_obj_filt[dupes[i],])
+  means$entrez [i] <- rownames(cnt_obj_filt) [dupes [i]]
+}
+means$toremove <- "FALSE"
+i <- 1
+c <- 1
+while (i <= length(dupes)) {
+  if (i==c) {
+    c <- c+1
+  } else if (means$entrez [i] == means$entrez [c]) {
+    if(means$avg [i] > means$avg [c]) {
+      means$toremove [c] <- T
+    } else {
+      means$toremove [i] <- T
+    }
+    i <- i+1
+    c <- 1
+  } else {
+    c <- c+1
+  }
+}
+dupes_to_remove <- means %>% filter(toremove == T)
+cnt_obj_filt <- cnt_obj_filt [-dupes_to_remove$index,]
+geneids_smbl <- mapIds(org.Hs.eg.db, keys = rownames(cnt_obj_filt), keytype = "ENTREZID", column = "SYMBOL", multiVals = "first") %>% 
+  unlist() 
+geneids_smbl <- data.frame(entrezid = names(geneids_smbl), symbol = unname(geneids_smbl))
+```
+
+
+```{r eggsea, eval=FALSE}
+#Move onto EGSEA analysis
+#Build gene set collection
+gs.annots <-  buildIdx(entrezIDs = rownames(cnt_obj_filt), species = "human",
+msigdb.gsets = "none")
+
+
+#Remove problematic pathways that may mess up analysis printing
+problematic_pathways <- c("Dorso-ventral axis formation", "MicroRNAs in cancer") # hsa04320,hsa05206
+sel = which(names(gs.annots[["kegg"]]@original) %in% problematic_pathways) 
+gs.annots[["kegg"]]@original = gs.annots[["kegg"]]@original[-sel] 
+gs.annots[["kegg"]]@idx = gs.annots[["kegg"]]@idx[-sel] 
+gs.annots[["kegg"]]@anno = gs.annots[["kegg"]]@anno[-sel, ]
+
+#Perform the EGSEA analysis with voom built-in
+gsa <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_matrix,
+  contrasts = contrast_obj, gs.annots = gs.annots, symbolsMap = geneids_smbl,
+ baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.1, combineMethod = "wilkinson",
+  num.threads = 4, report = TRUE, report.dir = here::here("final RUV figures/all comparisons"),
+  verbose = T, display.top = 35)
+gsets <- read_tsv(here::here("final RUV figures/all comparisons/ranked-gene-sets-base/ranked-kegg-gene-sets-WT9-N9.txt"))
+#pdf(here::here("final RUV figures/egsea WTvsN top pathways.pdf"), width = 14, height = 18)
+ggplot(dplyr::slice(gsets,1:30),
+       aes(x=-log10(p.adj), y = fct_reorder(str_wrap(GeneSet,30),-Rank), fill = as.character(direction))) +
+  geom_bar(stat = "identity", color = "black", lwd = 1) +
+  geom_vline(xintercept = 1, linetype = "longdash", color = "red2", lwd = 1.25) +
+  labs(title = "WT-N comparison \nmost significant affected pathways", y = '', fill = "Regulation direction") +
+  scale_fill_manual(values = c("-1" = "deepskyblue3","1" = "coral"),
+                    labels = c("-1" = "Down-regulated","1" = "Up-regulated")) +
+  theme_minimal(base_size = 24) + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank())
+#dev.off()
+```
+
+```{r egsea-msigdb-h, eval=FALSE}
+#Move onto EGSEA analysis with hallmark gene sets
+
+#Build gene set collection
+gs.annots.h <-  buildGMTIdx(geneIDs = rownames(cnt_obj_filt), species = "Human", gmt.file = here::here("h.all.v7.5.1.entrez.gmt"))
+
+gsa.h <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_matrix,
+  contrasts = contrast_obj, gs.annots = gs.annots.h, symbolsMap = geneids_smbl,
+ baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.1, combineMethod = "wilkinson",
+  num.threads = 4, report = TRUE, report.dir = here::here("final RUV figures/all comparisons MSIGDB Hallmark"),
+  verbose = T, display.top = 35)
+gsets.h <- read_tsv(here::here("final RUV figures/all comparisons MSIGDB Hallmark/ranked-gene-sets-base/ranked-gmtcustom-gene-sets-WT9-N9.txt"))
+#pdf(here::here("final RUV figures/egsea hallmark WTvsN top pathways.pdf"), width = 14, height = 18)
+ggplot(dplyr::slice(gsets.h,1:20),
+       aes(x=-log10(p.adj), 
+           y = fct_reorder(str_wrap(str_remove(str_replace_all(GeneSet,"_"," "),"HALLMARK "),20),-log10(p.adj)),
+           fill = as.character(direction))) +
+  geom_bar(stat = "identity", color = "black", lwd = 1) +
+  geom_vline(xintercept = 1, linetype = "longdash", color = "red2", lwd = 1.25) +
+  labs(title = "WT-N comparison \nmost significant affected Hallmark pathways", y = '', 
+       fill = "Regulation direction") +
+  scale_fill_manual(values = c("-1" = "deepskyblue3","1" = "coral"),
+                    labels = c("-1" = "Down-regulated","1" = "Up-regulated")) +
+  theme_minimal(base_size = 24) + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank())
+#dev.off()
+```
+
+
+
+Write all the necessary objects as text tables to combine with miRNA results
+```{r write-tables, eval=FALSE}
+write.table(cnt_obj_filt, here::here("final RUV figures/count_matrix_for_egsea.txt"),
+            sep = "\t", row.names = T)
+write.table(counts(dds), here::here("final RUV figures/count_matrix_from_dds.txt"),
+            sep = "\t", row.names = T)
+write.table(normalizationFactors(dds), here::here("final RUV figures/norm_factors_from_dds.txt"),
+            sep = "\t", row.names = T)
+write_tsv(geneids_smbl, here::here("final RUV figures/egsea_symbol_mapping.txt"))
+```
