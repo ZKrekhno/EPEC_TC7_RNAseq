@@ -201,7 +201,7 @@ ggplot(data = normal_PCA, aes(shape = pData$genotype, color = pData$genotype)) +
 ```
 
 
-``` {r res}
+``` {r res-printing}
 resWTvsUI <- results(dds, contrast = c("group","WT9", "UI9"))
 resWTvsN <- results(dds, contrast = c("group","WT9", "N9"))
 resNvsUI <- results(dds, contrast = c("group","N9", "UI9"))
@@ -217,8 +217,7 @@ res <- list(resWTvsUI,resWTvsN,resNvsUI) %>%
               .cols = matches("\\.[xy]")) %>% 
   rename_with(function(x) "Gene ID",1)
 map(list(resWTvsUI,resWTvsN,resNvsUI),summary)
-#write.table(res, here::here("final RUV figures/RUVs normalized results.txt"),
- #           sep = "\t", row.names = F)
+#write.csv(res, here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/tables/RUVs normalized results.csv"), row.names = F)
 ```
 
 Next step is to analyze PCA loadings 
