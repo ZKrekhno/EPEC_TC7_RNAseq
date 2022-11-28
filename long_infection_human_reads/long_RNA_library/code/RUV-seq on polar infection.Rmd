@@ -104,6 +104,7 @@ https://bioconductor.org/packages/release/workflows/vignettes/rnaseqGene/inst/do
 
 
 ``` {r echo=TRUE, results = 'asis', include=TRUE}
+#Run differential expression analysis with just EDAseq normalization - and no RUV
 dds <- DESeqDataSetFromMatrix(countData = counts(dataOffset),
                               colData = pData,
                               design = ~  group)
@@ -118,7 +119,7 @@ resWTvsN <- results(dds, contrast = c("group","WT9", "N9"))
 resNvsUI <- results(dds, contrast = c("group","N9", "UI9"))
 map(list(resWTvsUI,resWTvsN,resNvsUI),summary)
 
-
+#Repeat analysis with RUVs and k=1
 dds1 <- DESeqDataSetFromMatrix(countData = counts(rv1),
                               colData = pData(rv1),
                               design = ~ W_1 + group)
@@ -129,6 +130,7 @@ dds1 <- DESeq(dds1)
 rld1 <- vst(dds1)
 DESeq2::plotPCA(rld1, returnData = F, intgroup = "group")
 
+#Use limma's removeBatchEffect for PCA plotting RUV-corrected data
 mat <- limma::removeBatchEffect(assay(rld1),
                                 covariates = rld1$W_1, design = model.matrix(~ genotype, colData(rld1)))
 rld1.nobatch <- rld1
@@ -173,54 +175,87 @@ names(wtvsn.res) <- c("No RUV","RUVs k=1","RUVs k=2")
 #pdf(here::here("long_infection_human_reads/long_RNA_library/results/final RUV figures/RUV effect on DE genes between WT and EscN infection.pdf"), width = 6, height = 4)
 eulerplot <- euler(wtvsn.res, shape = "circle")
 plot(eulerplot, quantities = list(T, type = c("counts"), fontsize = 12), 
-     fills = c(carto_pal(7,"DarkMint") [1],carto_pal(7,"DarkMint") [3], carto_pal(7,"DarkMint") [7]),
+     fills = c(carto_pal(7,"BluYl") [1],carto_pal(7,"BluYl") [3], carto_pal(7,"BluYl") [7]),
      adjust_labels = T, alpha = 0.7, legend = T, labels = F)
 plot(eulerplot, quantities = list(T, type = c("counts", "percent"), fontsize = 12), 
-     fills = c(carto_pal(7,"DarkMint") [1],carto_pal(7,"DarkMint") [3], carto_pal(7,"DarkMint") [7]),
+     fills = c(carto_pal(7,"BluYl") [1],carto_pal(7,"BluYl") [3], carto_pal(7,"BluYl") [7]),
      adjust_labels = T, alpha = 0.7, legend = T, labels = F)
 #dev.off()
 ```
 
-Check whether 1 factor is enough to get noticeable correlation between genotype and PC. 
-```{r, fig.width=8, fig.height=6}
+Check how corrections methods affect correlation of metadata with the data.
+Do it with a simple linear regression
+```{r linear_regression_pca, fig.width=8, fig.height=6}
 library(PCAtools)
-p1 <- pca(assay(rld1.nobatch),colData(dds1), removeVar = 0.1)
-p2 <- pca(assay(rld2.nobatch),colData(dds2), removeVar = 0.1)
-#pdf(here::here("final RUV figures/PCAtools outputs with RUV 1 or 2.pdf"), width = 12, height = 10)
-biplot(p1, colby = "genotype", shape = "genotype",gridlines.major = FALSE, title = "RUVs k=1")
-biplot(p2, colby = "genotype", shape = "genotype",gridlines.major = FALSE, title = "RUVs k=2")
-eigencorplot(p1,
-             components = getComponents(p1,1:9),
-    metavars = c('group','genotype', 'W_1'),
-    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
-    cexCorval = 1.2,
-    fontCorval = 2,
-    posLab = 'all',
-    rotLabX = 45,
-    scale = TRUE,
-    main = bquote(PC ~ "RUVs k=1" ~ Pearson ~ r^2 ),
-    plotRsquared = TRUE,
-    corFUN = 'pearson',
-    corUSE = 'pairwise.complete.obs',
-    corMultipleTestCorrection = 'BH',
-    signifSymbols = c('****', '***', '**', '*', ''),
-    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
-eigencorplot(p2,
-             components = getComponents(p2,1:9),
-    metavars = c('group','genotype', 'W_1','W_2'),
-    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
-    cexCorval = 1.2,
-    fontCorval = 2,
-    posLab = 'all',
-    rotLabX = 45,
-    scale = TRUE,
-    main = bquote(PC ~ "RUVs k=2" ~ Pearson ~ r^2 ),
-    plotRsquared = TRUE,
-    corFUN = 'pearson',
-    corUSE = 'pairwise.complete.obs',
-    corMultipleTestCorrection = 'BH',
-    signifSymbols = c('****', '***', '**', '*', ''),
-    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
+p_list <- set_names(list(rld,rld1.nobatch,rld2.nobatch), nm = c("No RUV", "RUVs k=1", "RUVs k=2")) %>% 
+  map(~pca(assay(.x), colData(.x), removeVar = 0.1))
+pca_coord_meta_list <- p_list %>% 
+  map(~.x$rotated) %>% 
+  map2(list(rld,rld1.nobatch,rld2.nobatch), ~merge(.x,as.data.frame(colData(.y)), by = 0)) %>% 
+  map(mutate, group = fct_relevel(group, "WT9"))
+#Create the lists to store information on the linear model performance
+fit_list <- p_list
+signi_list <- p_list
+#Run the linear model for each PC
+for (i in seq_along(pca_coord_meta_list)) {
+  pca_coord_meta_df <- pca_coord_meta_list [[i]]
+  #Create a fit for each PC
+  fit_list [[i]] <- set_names(vector(mode = "list", length = 9),
+                              nm = str_c("PC",1:9))
+  signi_list [[i]] <- set_names(vector(mode = "list", length = 9),
+                              nm = str_c("PC",1:9))
+  for (PC in seq_along(fit_list [[i]])) {
+    frm <- as.formula(str_c("PC",PC, " ~ group"))
+    fit_list [[i]] [[PC]] <- lm(frm, data = pca_coord_meta_df)
+    sum_of_fit <- summary(fit_list [[i]] [[PC]])
+    signi_list [[i]] [[PC]] <- sum_of_fit$coefficients %>% 
+      as.data.frame() %>% 
+      mutate(R_squared = sum_of_fit$r.squared)
+  }
+}
+#Summarise liner model performance and plot the results
+signi_list_reduced <- signi_list %>% 
+  map(~map2(.x,names(.x), ~mutate(.x, PC = .y))) %>% 
+  map(map, rownames_to_column, var = "coef") %>% 
+  map(purrr::reduce, bind_rows) %>% 
+  map2(names(signi_list), ~mutate(.x, RUV = .y)) %>% 
+  purrr::reduce(bind_rows) %>% 
+  filter(coef != "(Intercept)") %>% 
+  dplyr::rename(p = `Pr(>|t|)`) %>%  
+  mutate(signi = case_when(
+    p < 0.05 ~ "yes",
+    TRUE ~ "no"
+  ))
+#Plot the results of regression
+ggplot(signi_list_reduced) +
+  geom_tile(aes(y=coef,x=PC, fill = p)) +
+  geom_text(data = filter(signi_list_reduced, signi == "yes"), aes(y=coef,x=PC), 
+            label = "*", color = "white", size = 13) +
+  facet_wrap(~RUV, nrow = 3, scales = "free") +
+  labs(x = element_blank(), y = element_blank(), title = "Linear regression analysis\nidentifying relationships between metadata and PC") +
+  scale_y_discrete(labels = c(groupUI9 = "Effect of Infection",groupN9 = "Effect of T3SS")) +
+  scale_fill_carto_c(palette = "BluYl", direction = -1, name = "p-value") +
+  theme_minimal(base_size = 19) +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        axis.ticks.x = element_line(color = "black"),
+        axis.ticks.y = element_line(color = "black"),
+        panel.grid.major = element_blank(),
+        axis.text = element_text(color = "black"),
+        title = element_text(size = 12),
+        legend.title = element_text(size = 19))
+#ggsave(here::here("long_infection_human_reads/long_RNA_library/results/final RUV figures/Linear regression of metadata and PCA with respect to RUV.png"), width = 8,height = 6, dpi = 1080)
+```
+
+Finally, just make a quick PCA plot to confirm tighter grouping
+```{r biplots, fig.width=6, fig.height=5}
+#pdf(here::here("long_infection_human_reads/long_RNA_library/results/final RUV figures/PCAtools biplots with RUV.pdf"), width = 6, height = 5)
+coloring_key <- fct_unique(as_factor(set_names(pData$graph_cols, nm = pData$genotype)))
+map2(p_list, names(p_list), 
+      ~biplot(.x, colby = "genotype", shape = "genotype",gridlines.major = FALSE, title = .y,
+              colkey = coloring_key))
+
 #dev.off()
 ```
-From this it is clear that 2 unwanted factors is better than 1. We get majority of the same DE genes as non-adjusted or 1 factor adjusted objects.
+From this it is clear that 2 unwanted factors is better than 1. We get majority of the same DE genes as non-adjusted or 1 factor adjusted objects and better grouping of the samples.
+
+
