@@ -222,8 +222,9 @@ map(list(resWTvsUI,resWTvsN,resNvsUI),summary)
 
 Next step is to analyze PCA loadings 
 Analyze loadings of the principal components in the data
-```{r pcatools}
+```{r pcatools, fig.width=6, fig.height=2.5}
 #Create a mapping for ID to symbol
+#Have to remove the chromosome part from ENSEMBL ID (so whatever comes after the period)
 geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(rownames(counts(dds)), "\\.[1-9]([0-9])?", ""), 
                   keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first")
 
@@ -235,38 +236,65 @@ newnames <- ifelse(is.na(geneids) | duplicated(geneids),
     names(geneids), geneids)
 rownames(cnts) <- newnames
 p <- pca(cnts,colData(dds), removeVar = 0.1)
-p$metadata$genotype <- p$metadata$genotype %>% as.factor() %>% fct_relevel("N")
-p$metadata$group <- p$metadata$group %>% as.factor() %>% fct_relevel("N9")
-#pdf(here::here("final RUV figures/PCA tools analysis of PCA.pdf"), width = 12, height = 10)
-biplot(p, colby = "genotype", shape = "genotype", showLoadings = T,gridlines.major = FALSE)
-biplot(p, colby = "genotype", shape = "genotype",gridlines.major = FALSE)
-plotloadings(p,  rangeRetain = 0.01,
-    labSize = 4.0,
-    caption = "Top 1% variables")
-eigencorplot(p,
-             components = getComponents(p,c(1:9)),
-             metavars = c('group','genotype'))
-eigencorplot(p,
-             components = getComponents(p,1:9),
-    metavars = c('group','genotype'),
-    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
-    cexCorval = 2,
-    cexLabX = 1.8,
-    cexLabY = 1.8,
-    cexLabColKey = 1.8,
-    fontCorval = 2,
-    posLab = 'bottomleft',
-    rotLabX = 45,
-    scale = TRUE,
-    main = bquote(Principal ~ component ~ Pearson ~ r^2 ~ correlates),
-    plotRsquared = TRUE,
-    corFUN = 'pearson',
-    corUSE = 'pairwise.complete.obs',
-    corMultipleTestCorrection = 'BH',
-    signifSymbols = c('****', '***', '**', '*', ''),
-    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
-#dev.off()
+#Perform linear regression analysis to confirm association of PC coordinates with metadata
+pca_coord_meta <- p$rotated %>% 
+  merge(as.data.frame(colData(rld2.nobatch)), by = 0) %>% 
+  mutate(group = fct_relevel(group, "WT9"))
+#Create the lists to store information on the linear model performance
+fit_list <- set_names(vector(mode = "list", length = 9),
+                              nm = str_c("PC",1:9))
+signi_list <- set_names(vector(mode = "list", length = 9),
+                              nm = str_c("PC",1:9))
+#Run linear regression for each principal component
+for (PC in seq_along(fit_list)) {
+  frm <- as.formula(str_c("PC",PC, " ~ group"))
+  fit_list [[PC]] <- lm(frm, data = pca_coord_meta_df)
+  sum_of_fit <- summary(fit_list [[PC]])
+  signi_list [[PC]] <- sum_of_fit$coefficients %>% 
+    as.data.frame() %>% 
+    mutate(R_squared = sum_of_fit$r.squared)
+}
+#Simplify the lists
+#Summarise liner model performance and plot the results
+signi_list_reduced <- signi_list %>% 
+  map2(names(signi_list), ~mutate(.x, PC = .y)) %>% 
+  map(rownames_to_column, var = "coef") %>% 
+  purrr::reduce(bind_rows) %>% 
+  filter(coef != "(Intercept)") %>% 
+  dplyr::rename(p = `Pr(>|t|)`) %>%  
+  mutate(signi = case_when(
+    p < 0.05 ~ "yes",
+    TRUE ~ "no"
+  ))
+#Plot the results of regression
+ggplot(signi_list_reduced) +
+  geom_tile(aes(y=coef,x=PC, fill = p)) +
+  geom_text(data = filter(signi_list_reduced, signi == "yes"), aes(y=coef,x=PC), 
+            label = "*", color = "white", size = 13) +
+  labs(x = element_blank(), y = element_blank(), title = "Linear regression analysis\nidentifying relationships between metadata and PC") +
+  scale_y_discrete(labels = c(groupUI9 = "Effect of Infection",groupN9 = "Effect of T3SS")) +
+  scale_fill_carto_c(palette = "BluYl", direction = -1, name = "p-value") +
+  theme_minimal(base_size = 14) +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        axis.ticks.x = element_line(color = "black"),
+        axis.ticks.y = element_line(color = "black"),
+        panel.grid.major = element_blank(),
+        axis.text = element_text(color = "black"),
+        title = element_text(size = 8),
+        legend.title = element_text(size = 14))
+#ggsave(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/Linear regression of metadata and PCA.png"), width = 6,height = 2.5, dpi = 1080)
 ```
+
+
+```{r pcatools-loadings-plot, fig.width=9, fig.height=6}
+plotloadings(p,  rangeRetain = 0.01,
+    labSize = 2.5, col = carto_pal(3,diverg_pal_choice) ,
+    caption = "Top 1% variables") + theme(legend.title = element_text())
+#ggsave(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/PCA tools analysis of PCA.png"), width = 9, height = 6, dpi = 1080)
+#It is quite nice here - ENSG00000285513 is antisense to APOA4 - that protein is involved in cholesterol metabolism.
+#It is among the strongest drivers of PC2 - which is most correlated with T3SS functionality
+```
+
 Make volcano plots of differentially expressed genes
 ```{r volcano}
 #shrink results
