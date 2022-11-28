@@ -93,7 +93,7 @@ rv2 <- RUVs(dataOffset, cidx, k=2, scidx, epsilon = 1, isLog = F)
 plotPCA(dataOffset, col = pData$graph_cols, main = "UQ normalized counts")
 plotPCA(rv1, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 1 k")
 plotPCA(rv2, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 2 k")
-plotRLE(dataOffset, col = pData$graph_colss, main = "UQ normalized counts")
+plotRLE(dataOffset, col = pData$graph_cols, main = "UQ normalized counts")
 plotRLE(rv1, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 1 k")
 plotRLE(rv2, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 2 k")
 #dev.off()
@@ -163,23 +163,26 @@ walk(list(resWTvsUI.2,resWTvsN.2,resNvsUI.2),summary)
 ```
 
 Generally, the differences between 1 and 2 factors are not that large. Check how differentially expressed genes behave
-```{r}
+```{r eulerplot, fig.width=6, fig.height=4}
 wtvsn.res <- list(resWTvsN, resWTvsN.1,resWTvsN.2) %>% 
   map(as.data.frame) %>%  
-  map(~(filter(.,padj < 0.1))) %>% 
+  map(~(filter(.,padj < 0.05))) %>% 
   map(function(x) rownames(x))
 names(wtvsn.res) <- c("No RUV","RUVs k=1","RUVs k=2")
 #Visualize these results on a Venn diagram
-#pdf(here::here("final RUV figures/RUV effect on DE genes between WT and EscN infection.pdf"), width = 12, height = 10)
-ggvenn(data = wtvsn.res,columns = c("No RUV","RUVs k=1"), fill_color = c("red","blue","green"), fill_alpha = 0.5, auto_scale = T,text_size = 10)
-ggvenn(data = wtvsn.res,columns = c("No RUV","RUVs k=2"), fill_color = c("red","aquamarine2"), fill_alpha = 0.5, auto_scale = T,text_size = 10)
-ggvenn(data = wtvsn.res,columns = c("RUVs k=1","RUVs k=2"), fill_color = c("blue","aquamarine2"), fill_alpha = 0.5, auto_scale = T,text_size = 10)
-ggvenn(data = wtvsn.res, fill_color = c("red","blue","aquamarine2"), fill_alpha = 0.5, text_size = 10)
+#pdf(here::here("long_infection_human_reads/long_RNA_library/results/final RUV figures/RUV effect on DE genes between WT and EscN infection.pdf"), width = 6, height = 4)
+eulerplot <- euler(wtvsn.res, shape = "circle")
+plot(eulerplot, quantities = list(T, type = c("counts"), fontsize = 12), 
+     fills = c(carto_pal(7,"DarkMint") [1],carto_pal(7,"DarkMint") [3], carto_pal(7,"DarkMint") [7]),
+     adjust_labels = T, alpha = 0.7, legend = T, labels = F)
+plot(eulerplot, quantities = list(T, type = c("counts", "percent"), fontsize = 12), 
+     fills = c(carto_pal(7,"DarkMint") [1],carto_pal(7,"DarkMint") [3], carto_pal(7,"DarkMint") [7]),
+     adjust_labels = T, alpha = 0.7, legend = T, labels = F)
 #dev.off()
 ```
 
 Check whether 1 factor is enough to get noticeable correlation between genotype and PC. 
-```{r}
+```{r, fig.width=8, fig.height=6}
 library(PCAtools)
 p1 <- pca(assay(rld1.nobatch),colData(dds1), removeVar = 0.1)
 p2 <- pca(assay(rld2.nobatch),colData(dds2), removeVar = 0.1)
