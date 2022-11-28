@@ -132,7 +132,12 @@ pData <- pData %>%
     str_detect(samples, "UI") ~ "UI",
     str_detect(samples, "N") ~ "N"
   ), timepoint = 9) %>%
-  dplyr::select(-samples)
+  dplyr::select(-samples) %>% 
+  mutate(graph_cols  = case_when(
+    genotype == "UI" ~ carto_pal(12,discrete_pal_choice) [10],
+    genotype == "WT" ~ carto_pal(12,discrete_pal_choice) [2],
+    genotype == "N" ~ carto_pal(12,discrete_pal_choice) [1]
+  ))
 pData$group <- factor(paste0(pData$genotype,pData$timepoint))
 
 data <- newSeqExpressionSet(counts=c_mat,
@@ -152,13 +157,11 @@ scidx <- matrix(data = c(str_subset(rownames(pData), "UI"),
                          str_subset(rownames(pData), "N")),  nrow = 3, byrow = T)
 cidx <- rownames(counts(data))
 rv2 <- RUVs(dataOffset, cidx, k=2, scidx, epsilon = 1, isLog = F)
-graphcols <- graph_cols <- fct_recode(pData$genotype, "coral" = "UI","darkblue" = "WT", "forestgreen" = "N") %>% 
-  as.character()
-#Already have these figures, so no need reprinting these
-plotPCA(dataOffset, col = graph_cols, main = "UQ normalized counts")
-plotPCA(rv2, col = graph_cols, main = "UQ normalized counts + RUVs with 2 k")
-plotRLE(dataOffset, col = graph_cols, main = "UQ normalized counts")
-plotRLE(rv2, col = graph_cols, main = "UQ normalized counts + RUVs with 2 k")
+#Confirming that RUVs k=2 tightens the PCA
+plotPCA(dataOffset, col = pData$graph_cols, main = "UQ normalized counts")
+plotPCA(rv2, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 2 k")
+plotRLE(dataOffset, col = pData$graph_cols, main = "UQ normalized counts")
+plotRLE(rv2, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 2 k")
 ```
 
 ``` {r dds}
@@ -173,26 +176,28 @@ normalizationFactors(dds) <- normFactors
 dds <- DESeq(dds)
 rld <- vst(dds)
 DESeq2::plotPCA(rld, intgroup = "group")
-#Use limma to actually remove these batch effects (DESEq2 only accounts for these, it does not )
+#Use limma to actually remove these batch effects (DESEq2 only accounts for these in analysis, it does not change counts for the PCA plot)
 mat <- limma::removeBatchEffect(assay(rld),
                                 covariates = matrix(data = c(rld$W_1,rld$W_2), ncol = 2),
                                 design = model.matrix(~ group, colData(rld)))
 rld2.nobatch <- rld
 assay(rld2.nobatch) <- mat
 normal_PCA <- DESeq2::plotPCA(rld2.nobatch, returnData = T, intgroup = "group")
-png(here::here("final RUV figures/PCA plot of normalized counts legend bottom.png"), width = 12, height = 10,
-   units = "in", res = 720)
+#png(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/PCA plot of normalized counts legend bottom.png"), width = 6, height = 5, units = "in", res = 1080)
 ggplot(data = normal_PCA, aes(shape = pData$genotype, color = pData$genotype)) +
   scale_color_manual(labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
                                 "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
-                     values = c("UI" = "coral","WT" = "darkblue", "N" = "forestgreen")) +
+                     values = c("UI" = carto_pal(12,discrete_pal_choice) [10],
+                                "WT" = carto_pal(12,discrete_pal_choice) [2], 
+                                "N" = carto_pal(12,discrete_pal_choice) [1])) +
   geom_point(mapping = aes(x = PC1, y = PC2), size = 5) +
-  labs(title = "RUVs corrected PCA plot", shape = "Infection", color = "Infection") +
+  labs(title = "RUVs corrected PCA plot", shape = "Infection", color = "Infection",
+       x = "PC1: 88% variance", y = "PC2: 6% variance") +
   scale_shape_manual(labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
                                 "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
                      values = c("UI" = 15, "WT" = 16, "N" = 17)) +
-  theme(legend.position = "bottom")
-dev.off()
+  theme(legend.position = "bottom", legend.title = element_text())
+#dev.off()
 ```
 
 
