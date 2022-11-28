@@ -396,7 +396,7 @@ DESeq2::plotMA(resWTUIlfc, main = "WT infection vs Uninfected cells \nResults af
 
 
 Create a heatmap of top differentially expressed genes
-```{r heatmap, eval=FALSE}
+```{r heatmap, fig.width=8, fig.height=6}
 heat_mat <- assay(rld2.nobatch)
 rownames(heat_mat) <- geneids$gene_name
 topVarGenes <- head(order(-rowVars(heat_mat)),20)
@@ -407,8 +407,24 @@ df <- as.data.frame(colData(rld)) %>%
   dplyr::select(genotype) %>% 
   transmute(`Infection status` = fct_recode(genotype, "T3SS-deficient EPEC" = "N",
                                             "Wild-type EPEC" = "WT","Uninfected" = "UI")) 
+pheatmap(mat, annotation_col=df, 
+         annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
+                                                         "Uninfected" = carto_pal(12,discrete_pal_choice) [10])),
+         fontsize = 14, treeheight_row = 0, treeheight_col = 10,
+         color = colorRampPalette(carto_pal(7,diverg_pal_choice)) (100))
+```
 
-pheatmap(mat, annotation_col=df, fontsize = 22)
+
+```{r heatmap-save, eval=FALSE, fig.width=8, fig.height=6}
+pheatmap(mat, annotation_col=df, 
+         annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
+                                                         "Uninfected" = carto_pal(12,discrete_pal_choice) [10])),
+         fontsize = 14, treeheight_row = 0, treeheight_col = 10,
+         color = colorRampPalette(carto_pal(7,diverg_pal_choice)) (100), 
+         filename = here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/top 20 DE heatmap.png"),
+         width = 8, height = 6)
 ```
 
 
