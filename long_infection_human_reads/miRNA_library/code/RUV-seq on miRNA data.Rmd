@@ -1,0 +1,223 @@
+---
+title: "RUV-seq on miRNA library"
+output: 
+  html_notebook: 
+    fig_width: 6
+    fig_height: 5
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(include = TRUE)
+library(greekLetters)
+library(RUVSeq)
+library(EDASeq)
+library(DESeq2)
+library(ggprism)
+library(eulerr)
+library(rcartocolor)
+library(tidyverse)
+library(PCAtools)
+theme_set(theme_prism(base_size = 14))
+pal_choice <- "Bold"
+```
+
+Prepare the data for analysis
+```{r echo=TRUE, results = 'markup', include=TRUE}
+#analyzing miRNA-seq library prep for TC7 infection for 9 hours
+counts <- read.table(here::here("long_infection_human_reads/miRNA_library/data/all_reads_mirDEEP2"), 
+                     header = F, sep = "\t", stringsAsFactors = F)
+#Next manipulate the table to remove redundant columns and only keep relevant columns (1 columns with gene names, and the rest with counts for reverse stranded library)
+counts_simple <- counts %>% dplyr::select(Mature_miRNA = V1, precursor = V3, UI92 = V2, UI93 = V8, UI96 = V14, N92 = V20, N93 = V26, WT96 = V32, WT91 = V38, WT94 = V44, N95 = V50)
+filter <- apply(counts_simple [,3:11],1,function(x) mean(x)>5)
+counts_simple <- counts_simple [filter,]
+```
+
+```{r edaseq}
+#Use EDAseq to normalize the libraries
+c_mat <- counts_simple %>% 
+                     dplyr::select(-where(is.character)) %>% 
+                     dplyr::slice(-1:-4) %>% 
+                     as.matrix()
+rownames(c_mat) <- counts_simple$Gene_ID [-1:-4]
+pData <- data.frame(genotype=vector(mode = "logical", length = ncol(c_mat)),
+                    timepoint = vector(mode = "logical", length = ncol(c_mat)),
+                    samples = colnames(c_mat),
+                    row.names = colnames(c_mat))
+pData <- pData %>% 
+  mutate(genotype = case_when(
+    str_detect(samples, "WT") ~ "WT",
+    str_detect(samples, "UI") ~ "UI",
+    str_detect(samples, "N") ~ "N"
+  ), timepoint = 9) %>%
+  dplyr::select(-samples)
+pData$group <- factor(paste0(pData$genotype,pData$timepoint))
+
+data <- newSeqExpressionSet(counts=c_mat,
+                            phenoData=pData)
+#Normalize the data next
+dataNorm <- betweenLaneNormalization(data, which="upper") 
+#For DE we will create this analysis with offset values
+dataOffset <- betweenLaneNormalization(data,
+                                       which="upper",offset=TRUE)
+#Plot the counts 
+#pdf(here::here("long_infection_human_reads/miRNA_library/results/final RUV figures/EDAseq_normalization.pdf"), width = 5, height = 5)
+pData <- pData %>% 
+  mutate(graph_cols  = case_when(
+    genotype == "UI" ~ carto_pal(12,pal_choice) [10],
+    genotype == "WT" ~ carto_pal(12,pal_choice) [2],
+    genotype == "N" ~ carto_pal(12,pal_choice) [1]
+  ))
+plotPCA(data, col = pData$graph_cols, main = "Unnormalized counts")
+plotPCA(dataOffset, col = pData$graph_cols, main = "Normalized counts")
+plotRLE(data, col = pData$graph_cols, main = "RLE Unnormalized counts")
+plotRLE(dataOffset, col = pData$graph_cols, main = "RLE Normalized counts")
+boxplot(data, main = "Unnormalized counts", col = pData$graph_cols)
+boxplot(dataNorm, main = "Normalized counts", col = pData$graph_cols)
+#dev.off()
+```
+
+Try RUV-Seq. First confirm that library size normalization helps somewhat with data, but not enough for clear separation of genotypes
+
+Prepare the RUV-seq objects and perform RUVs normalization
+``` {r echo=TRUE, results = 'asis', include=TRUE}
+scidx <- matrix(data = c(str_subset(rownames(pData), "UI"),
+                         str_subset(rownames(pData), "WT"),
+                         str_subset(rownames(pData), "N")),  nrow = 3, byrow = T)
+cidx <- rownames(counts(data))
+rv1 <- RUVs(dataOffset, cidx, k=1, scidx, epsilon = 1, isLog = F)
+rv2 <- RUVs(dataOffset, cidx, k=2, scidx, epsilon = 1, isLog = F)
+#pdf(here::here("final RUV figures/Normalization effect on the library and RUV normalization.pdf"), width = 12, height = 10)
+plotPCA(dataOffset, col = graph_cols, main = "UQ normalized counts")
+plotPCA(rv1, col = graph_cols, main = "UQ normalized counts + RUVs with 1 k")
+plotPCA(rv2, col = graph_cols, main = "UQ normalized counts + RUVs with 2 k")
+plotRLE(dataOffset, col = graph_cols, main = "UQ normalized counts")
+plotRLE(rv1, col = graph_cols, main = "UQ normalized counts + RUVs with 1 k")
+plotRLE(rv2, col = graph_cols, main = "UQ normalized counts + RUVs with 2 k")
+#dev.off()
+```
+#The RUV normalization is done, now we have normalization factors or weights, that can be fed into DESeq2
+Keep an eye on this 
+https://bioconductor.org/packages/release/workflows/vignettes/rnaseqGene/inst/doc/rnaseqGene.html#using-ruv-with-deseq2
+
+
+``` {r echo=TRUE, results = 'asis', include=TRUE}
+dds <- DESeqDataSetFromMatrix(countData = counts(dataOffset),
+                              colData = pData,
+                              design = ~  group)
+normFactors <- exp(-1 * offst(dataOffset))
+normFactors <- normFactors / exp(rowMeans(log(normFactors)))
+normalizationFactors(dds) <- normFactors
+dds <- DESeq(dds)
+rld <- varianceStabilizingTransformation(dds)
+DESeq2::plotPCA(rld, intgroup = "group")
+resWTvsUI <- results(dds, contrast = c("group","WT9", "UI9"))
+resWTvsN <- results(dds, contrast = c("group","WT9", "N9"))
+resNvsUI <- results(dds, contrast = c("group","N9", "UI9"))
+walk(list(resWTvsUI,resWTvsN,resNvsUI),summary)
+
+
+dds1 <- DESeqDataSetFromMatrix(countData = counts(rv1),
+                              colData = pData(rv1),
+                              design = ~ W_1 + group)
+normFactors <- exp(-1 * offst(dataOffset))
+normFactors <- normFactors / exp(rowMeans(log(normFactors)))
+normalizationFactors(dds1) <- normFactors
+dds1 <- DESeq(dds1)
+rld1 <- varianceStabilizingTransformation(dds1)
+DESeq2::plotPCA(rld1, returnData = F, intgroup = "group")
+
+mat <- limma::removeBatchEffect(assay(rld1),
+                                covariates = rld1$W_1, design = model.matrix(~ genotype, colData(rld1)))
+rld1.nobatch <- rld1
+assay(rld1.nobatch) <- mat
+DESeq2::plotPCA(rld1.nobatch, returnData = F, intgroup = "group")
+
+resWTvsUI.1 <- results(dds1, contrast = c("group","WT9", "UI9"))
+resWTvsN.1 <- results(dds1, contrast = c("group","WT9", "N9"))
+resNvsUI.1 <- results(dds1, contrast = c("group","N9", "UI9"))
+walk(list(resWTvsUI.1,resWTvsN.1,resNvsUI.1),summary)
+
+#Now repeat with 2 factors accounted for:
+dds2 <- DESeqDataSetFromMatrix(countData = counts(rv2),
+                              colData = pData(rv2),
+                              design = ~ W_1 + W_2 + group)
+normalizationFactors(dds2) <- normFactors
+dds2 <- DESeq(dds2)
+rld2 <- varianceStabilizingTransformation(dds2)
+DESeq2::plotPCA(rld2, returnData = F, intgroup = "group")
+
+mat <- limma::removeBatchEffect(assay(rld2),
+                                covariates = matrix(data = c(rld2$W_1,rld2$W_2), ncol = 2),
+                                design = model.matrix(~ genotype, colData(rld2)))
+rld2.nobatch <- rld2
+assay(rld2.nobatch) <- mat
+DESeq2::plotPCA(rld2.nobatch, returnData = F, intgroup = "group")
+
+resWTvsUI.2 <- results(dds2, contrast = c("group","WT9", "UI9"))
+resWTvsN.2 <- results(dds2, contrast = c("group","WT9", "N9"))
+resNvsUI.2 <- results(dds2, contrast = c("group","N9", "UI9"))
+walk(list(resWTvsUI.2,resWTvsN.2,resNvsUI.2),summary)
+```
+
+Generally, the differences between 1 and 2 factors are not that large. Check how differentially expressed genes behave
+```{r}
+wtvsn.res <- list(resWTvsN, resWTvsN.1,resWTvsN.2) %>% 
+  map(as.data.frame) %>%  
+  map(~(filter(.,padj < 0.1))) %>% 
+  map(function(x) rownames(x))
+names(wtvsn.res) <- c("No RUV","RUVs k=1","RUVs k=2")
+#Visualize these results on a Venn diagram
+#pdf(here::here("final RUV figures/RUV effect on DE genes between WT and EscN infection.pdf"), width = 12, height = 10)
+ggvenn(data = wtvsn.res,columns = c("No RUV","RUVs k=1"), fill_color = c("red","blue","green"), fill_alpha = 0.5, auto_scale = T)
+ggvenn(data = wtvsn.res,columns = c("No RUV","RUVs k=2"), fill_color = c("red","blue","green"), fill_alpha = 0.5, auto_scale = T)
+ggvenn(data = wtvsn.res,columns = c("RUVs k=1","RUVs k=2"), fill_color = c("red","blue","green"), fill_alpha = 0.5, auto_scale = T)
+ggvenn(data = wtvsn.res, fill_color = c("red","blue","aquamarine2"), fill_alpha = 0.5)
+#dev.off()
+```
+
+Check whether 1 factor is enough to get noticeable correlation between genotype and PC. 
+```{r}
+library(PCAtools)
+p1 <- pca(assay(rld1.nobatch),colData(dds1), removeVar = 0.1)
+p2 <- pca(assay(rld2.nobatch),colData(dds2), removeVar = 0.1)
+#pdf(here::here("final RUV figures/PCAtools outputs with RUV 1 or 2.pdf"), width = 12, height = 10)
+biplot(p1, colby = "genotype", shape = "genotype",gridlines.major = FALSE, title = "RUVs k=1")
+biplot(p2, colby = "genotype", shape = "genotype",gridlines.major = FALSE, title = "RUVs k=2")
+eigencorplot(p1,
+             components = getComponents(p1,1:9),
+    metavars = c('group','genotype', 'W_1'),
+    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
+    cexCorval = 1.2,
+    fontCorval = 2,
+    posLab = 'all',
+    rotLabX = 45,
+    scale = TRUE,
+    main = bquote(PC ~ "RUVs k=1" ~ Pearson ~ r^2 ),
+    plotRsquared = TRUE,
+    corFUN = 'pearson',
+    corUSE = 'pairwise.complete.obs',
+    corMultipleTestCorrection = 'BH',
+    signifSymbols = c('****', '***', '**', '*', ''),
+    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
+eigencorplot(p2,
+             components = getComponents(p2,1:9),
+    metavars = c('group','genotype', 'W_1','W_2'),
+    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
+    cexCorval = 1.2,
+    fontCorval = 2,
+    posLab = 'all',
+    rotLabX = 45,
+    scale = TRUE,
+    main = bquote(PC ~ "RUVs k=2" ~ Pearson ~ r^2 ),
+    plotRsquared = TRUE,
+    corFUN = 'pearson',
+    corUSE = 'pairwise.complete.obs',
+    corMultipleTestCorrection = 'BH',
+    signifSymbols = c('****', '***', '**', '*', ''),
+    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
+#dev.off()
+```
+*Generally, does not seem like RUV can correct the data. So do not apply RUV to this library*
