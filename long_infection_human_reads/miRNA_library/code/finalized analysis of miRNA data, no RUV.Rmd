@@ -128,8 +128,7 @@ res <- list(resWTvsUI,resWTvsN,resNvsUI) %>%
   rename_with(function(x) "Gene ID",1) %>% 
   separate(`Gene ID`, into = c("Mature miRNA", "Precursor miRNA"), sep = "_")
 walk(list(resWTvsUI,resWTvsN,resNvsUI),summary)
-#write.table(res, here::here("final clean figures/normalized results.txt"),
- #          sep = "\t", row.names = F)
+#write.csv(res, here::here("long_infection_human_reads/miRNA_library/results/final clean figures/tables/normalized results.csv"), row.names = F)
 ```
 Next step is to determine overwhelming presence of miRNA (some can make up 50% of the data)
 ```{r abund-mirna}
