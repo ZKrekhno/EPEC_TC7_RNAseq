@@ -248,7 +248,7 @@ signi_list <- set_names(vector(mode = "list", length = 9),
 #Run linear regression for each principal component
 for (PC in seq_along(fit_list)) {
   frm <- as.formula(str_c("PC",PC, " ~ group"))
-  fit_list [[PC]] <- lm(frm, data = pca_coord_meta_df)
+  fit_list [[PC]] <- lm(frm, data = pca_coord_meta)
   sum_of_fit <- summary(fit_list [[PC]])
   signi_list [[PC]] <- sum_of_fit$coefficients %>% 
     as.data.frame() %>% 
@@ -667,7 +667,7 @@ pwalk(list(cp_res_suc, names(cp_res_suc), fold_changes_list_for_heatplot),
 #dev.off()
 ```
 Finally, perform clusterprofiler comparison of biological themes
-```{r cp-biological-themes, fig.width=8, fig.height=6}
+```{r cp-biological-themes, fig.width=8, fig.height=6, eval=FALSE}
 biol_theme_pathway_list <- map(set_names(list(h_sym, kegg_sym, re_sym), 
                                          nm = c("Hallmark","KEGG","Reactome")),
                                ~compareCluster(de_genes_names, fun = "enricher",
@@ -700,5 +700,107 @@ walk2(biol_pw_df_list,names(biol_pw_df_list),
       ~write_csv(.x, here::here(str_c("long_infection_human_reads/long_RNA_library/results/final clean figures/tables/", .y, "cp-biological_theme_comparison.csv"))))
 ```
 
+Finally, make a heatmap of DE genes from Apoptosis, TNFA signaling, or TGF-Beta, or IL6 JAK STAT3 signaling pathways.
+```{r pheatmap-select}
+heat_mat <- assay(rld2.nobatch)
+#Select genes in one of the pathways of interest
+h_sym_select <- h_sym %>% 
+  filter(str_detect(term, "APOPTOSIS") | 
+           str_detect(term, "TNF") |
+           str_detect(term, "TGF") |
+           str_detect(term, "IL6_JAK"))
+#Now filter the results table to include only DE genes found belonging to either of the pathways
+select_de_res <- de_genes %>% 
+  reduce(full_join, by = "gene") %>% 
+  select(gene) %>% 
+  left_join(h_sym_select, by = "gene") %>% 
+  filter(!is.na(term)) %>% 
+  mutate(term = fct(as.character(term), levels = unique(as.character(term)))) %>% 
+  group_by(gene) %>% 
+  arrange(term, .by_group = T) %>% 
+  mutate(term = str_remove(str_replace_all(term,"_"," "),"HALLMARK "))
+select_de_res_collapse <- select_de_res %>% 
+  summarise(final_term = str_c(term, collapse = "__")) %>% 
+  arrange(final_term) %>% 
+  mutate(`Gene set` = case_when(
+    str_detect(final_term, "APOP") & str_detect(final_term, "TNF") & str_detect(final_term, "TGF") ~ "Apoptosis, TNF-alpha, and TGF-beta signaling",
+    str_detect(final_term, "APOP") & str_detect(final_term, "TNF") & str_detect(final_term, "IL6") ~ "Apoptosis, TNF-alpha, and IL6/JAK-STAT signaling",
+    str_detect(final_term, "APOP") & str_detect(final_term, "TNF") ~ "Apoptosis and TNF-alpha signaling",
+    str_detect(final_term, "APOP") & str_detect(final_term, "IL6") ~ "Apoptosis and IL6/JAK-STAT signaling",
+    str_detect(final_term, "APOP") & str_detect(final_term, "TGF") ~ "Apoptosis and TGF-beta signaling",
+    str_detect(final_term, "IL6") & str_detect(final_term, "TNF") ~ "TNF-alpha and IL6/JAK-STAT signaling",
+    str_detect(final_term, "TGF") & str_detect(final_term, "TNF") ~ "TNF-alpha and TGF-beta signaling",
+    str_detect(final_term, "APOP") ~ "Apoptosis",
+    str_detect(final_term, "TNF") ~ "TNF-alpha signaling",
+    str_detect(final_term, "IL6") ~ "IL6/JAK-STAT signaling",
+    str_detect(final_term, "TGF") ~ "TGF-beta signaling",
+  ))
+
+#Now prepare the ordering of each gene by group for the heatmap - simplistic ordering by z-score in WT samples
+heat_mat_select <- heat_mat [select_de_res_collapse$gene,]
+#Calculate the z-scores
+heat_mat_select <- heat_mat_select - rowMeans(heat_mat_select)
+#Move onto ordering
+heat_mat_ordering <- heat_mat_select %>% 
+  as_tibble(rownames = "gene") %>% 
+  pivot_longer(-gene, names_to = "sample", values_to = "z") %>% 
+  mutate(sample = str_remove(sample, "[:digit:]+")) %>% 
+  group_by(gene, sample) %>% 
+  summarise(mean_z = mean(z)) %>% 
+  mutate(mean_z = round(mean_z, 2)) %>% 
+  pivot_wider(names_from = sample, values_from = mean_z) %>% 
+  left_join(select_de_res_collapse, by = "gene") %>% 
+  group_by(final_term) %>% 
+  arrange(WT,N,UI,.by_group = T)
+#Use this ordering on the final object for plotting
+heat_mat_select_ordered <- heat_mat_select [heat_mat_ordering$gene,]
+```
+
+
+```{r pheatmap-select-plot, eval = FALSE, fig.width=8, fig.height=6}
+#Set the breaks to be able to center the heatmap colors around 0
+mycolors <- rcartocolor::carto_pal(name = diverg_pal_choice)
+pal_length <- 255
+mybreaks <-  c(seq(min(heat_mat_select_ordered), 0, length.out=ceiling(pal_length/2) + 1), 
+                    seq(max(heat_mat_select_ordered)/pal_length, max(heat_mat_select_ordered), length.out=floor(pal_length/2)))
+color_scheme <- colorRampPalette(mycolors) (pal_length)
+#Create the df for row annotation
+annotation_row_df <- select_de_res_collapse %>% 
+  column_to_rownames(var = "gene") %>% 
+  select(`Gene set`)
+
+pheatmap(heat_mat_select_ordered,
+         annotation_col=df, 
+         annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
+                                                         "Uninfected" = carto_pal(12,discrete_pal_choice) [10]),
+                                  "Gene set" = set_names(carto_pal(11, "Safe"), nm = unique(annotation_row_df$`Gene set`))),
+         fontsize = 8, treeheight_col = 0, cluster_rows = F,
+         breaks = mybreaks, annotation_names_row = F, annotation_names_col = F,
+         annotation_row = annotation_row_df,
+         color = color_scheme, show_rownames = F, show_colnames = F, width = 8, height = 6,
+         filename = here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/Heatmap of most interesting genesets.png"))
+```
+
+Finally, create a heatmap for each gene set of interest
+```{r pheatmap-each-set, eval=FALSE,fig.width=8, fig.height=6}
+#Sub-divide the selected genes by gene set
+gene_by_path <- set_names(unique(select_de_res$term),unique(select_de_res$term)) %>% 
+  map(~filter(select_de_res, term == .x))
+heat_mat_by_path <- gene_by_path %>% 
+  map(~heat_mat_select [.x$gene,])
+pwalk(list(heat_mat_by_path, names(heat_mat_by_path), font_size_row = c(8,4,8, 8)),
+      ~pheatmap(..1,
+                annotation_col=df, 
+                annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
+                                                                "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
+                                                                "Uninfected" = carto_pal(12,discrete_pal_choice) [10])),
+                fontsize = 8, treeheight_col = 0, cluster_rows = T, treeheight_row = 0,
+                fontsize_row = ..3,
+                breaks = mybreaks, annotation_names_row = F, annotation_names_col = F,
+                color = color_scheme, show_rownames = T, show_colnames = F, main = ..2,
+                width = 8, height = 6,
+                filename = here::here(str_c("long_infection_human_reads/long_RNA_library/results/final clean figures/Heatmap of specific genesets - ",..2, ".png"))))
+```
 
 
