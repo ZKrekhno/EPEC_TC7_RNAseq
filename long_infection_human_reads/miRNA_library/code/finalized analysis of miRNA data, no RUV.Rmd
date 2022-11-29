@@ -307,16 +307,7 @@ geneids <- rownames(resWTNlfc) %>% str_replace_all("hsa-","")%>%
   as.data.frame() %>% 
   bind_cols(rownames(resWTNlfc)) %>% 
   dplyr::select("symbol" = 1, "rowname" = `...2`)
-#identify top20 genes for each comparison
-id_top <- function(x) {
-  x %>% 
-  as.data.frame() %>% 
-  arrange(padj) %>% 
-  dplyr::slice(1:10) %>% 
-  rownames_to_column(var = "rowname") %>% 
-  left_join(geneids) }
-top_list <- list("WTN" = resWTNlfc,"WTUI" = resWTUIlfc, "NUI" = resNUIlfc) %>% 
-  map(id_top)
+
 results_list <- list(resWTNlfc,resWTUIlfc,resNUIlfc)
 #Replace the rownames with gene names
 for (i in 1:3) {rownames(results_list [[i]]) <- geneids$symbol}
@@ -357,28 +348,24 @@ volcano_ggplot <- function(res_df, title = "", to_label = F, n_lab = 10) {
 }
 #Print the volcano plots - each should get its own png file
 volcano_list <- map2(res_df_list, 
-                     list(paste0("WT infection vs ", greeks("Delta"),  "EscN infection"),
+                     list(bquote("WT infection vs"~Delta*"EscN infection"),
                           "WT infection vs Uninfected cells",
-                          paste0(greeks("Delta"),"EscN infection vs Uninfected cells")),
+                          bquote(Delta*"EscN infection vs Uninfected cells")),
                      volcano_ggplot)
-#Save each as a png
-#walk2(volcano_list, names(volcano_list),
- #     ~ggsave(here::here(str_c("long_infection_human_reads/long_RNA_library/results/final clean figures/",.y, " Volcano plot.png")),.x,
-  #            width = 8, height = 6, dpi = 1080))
 #Repeat the same with adding top 10 DE genes
 volcano_list_labelled <- map2(res_df_list, 
-                     list(paste0("WT infection vs ", greeks("Delta"),  "EscN infection"),
+                     list(bquote("WT infection vs"~Delta*"EscN infection"),
                           "WT infection vs Uninfected cells",
-                          paste0(greeks("Delta"),"EscN infection vs Uninfected cells")),
+                          bquote(Delta*"EscN infection vs Uninfected cells")),
                      volcano_ggplot, to_label = T, n_lab = 10)
-#walk2(volcano_list_labelled, names(volcano_list_labelled),
- #     ~ggsave(here::here(str_c("long_infection_human_reads/long_RNA_library/results/final clean figures/",
-  #                             .y,
-   #                            " Volcano plot with labels.png")),.x,
-    #          width = 8, height = 6, dpi = 1080))
+#pdf(here::here("long_infection_human_reads/miRNA_library/results/final clean figures/Volcano plots.pdf"), width = 8, height = 6)
+walk(volcano_list, print)
+walk(volcano_list_labelled, print)
+#dev.off()
 
 
-#pdf(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/MA plots.pdf"), width = 6, height = 5)
+
+#pdf(here::here("long_infection_human_reads/miRNA_library/results/final clean figures/MA plots.pdf"), width = 6, height = 5)
 DESeq2::plotMA(resWTvsN, main = paste0("WT infection vs ", greeks("Delta"),  "EscN infection\nResults without shrinking"))
 DESeq2::plotMA(resWTNlfc, main = paste0("WT infection vs ", greeks("Delta"),  "EscN infection\nResults after apeglm shrinking"))
 DESeq2::plotMA(resWTvsUI, main = "WT infection vs Uninfected cells \nResults without shrinking")
@@ -387,101 +374,12 @@ DESeq2::plotMA(resWTUIlfc, main = "WT infection vs Uninfected cells \nResults af
 ```
 
 
-```{r old-volcano}
-#pdf(here::here("final clean figures/Volcano plots.pdf"), width = 12, height = 10)
-plotMA(resWTvsN, main = paste0("WT infection vs ", greeks("Delta"),  "EscN infection\nResults without shrinking"))
-plotMA(resWTNlfc, main = paste0("WT infection vs ", greeks("Delta"),  "EscN infection\nResults after apeglm shrinking"))
-plotMA(resWTvsUI, main = "WT infection vs uninfected cells \nResults without shrinking")
-plotMA(resWTUIlfc, main = "WT infection vs uninfected cells \nResults after apeglm shrinking")
-
-#Create a wrapper function for enhancedvolcano to plot all the graphs
-volcano_with_labels <- function(res_obj,select_lab = "",title) {
-  EnhancedVolcano(res_obj,
-    lab = rownames(res_obj),
-    selectLab = select_lab,
-    x = 'log2FoldChange',
-    y = 'pvalue',
-    title = title,
-    pointSize = 3,
-    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
-    legendPosition = 'right',
-    subtitle = NULL,
-    pCutoff = 0.05,
-    FCcutoff = 0.6,
-    labSize = 6.0,
-                boxedLabels = T, labCol = 'black',
-               labFace = 'bold',
-                drawConnectors = T, widthConnectors = 1.0,
-               colConnectors = 'black')
-}
-titles <- list(paste0("Differentially expressed genes between WT and ",greeks("Delta"),"EscN infected cells"),
-               paste0("Differentially expressed genes between WT and UI cells"),
-               paste0("Differentially expressed genes between",greeks("Delta"),"EscN infected and uninfected cells"))
-for (i in 1:3) {
-  volcano_with_labels(results_list[[i]],title = titles [[i]]) %>% print()
-  volcano_with_labels(results_list[[i]],select_lab = top_list [[i]]$gene_name,title = titles [[i]]) %>% print()
-}
-#dev.off()
-```
-Prep for EGSEA analysis to miRNA data
-First get entrez ids for all miRNA names
-```{r egsea-prep}
-#Prepare a mart object for mapping miRNA names to 
-mart <- useEnsembl(dataset = "hsapiens_gene_ensembl", biomart='ensembl')
-mirs <- rownames(resWTNlfc) %>% str_remove(".*_")
-annot <- getBM(attributes=c('entrezgene_id','hgnc_symbol','mirbase_id'), filters='mirbase_id', values=mirs, mart=mart)
-annot_no_na_or_dup <- annot %>% filter(!is.na(entrezgene_id), !duplicated(entrezgene_id), !duplicated(mirbase_id))
-```
-Annotate the rows of the count matrix with entrez gene ids
-```{r eggsea-prep}
-#remove intercept since this is a factor. Intercept or no intercept does not make a difference
-#That is what the 0+ means in the formula
-design_matrix <- model.matrix(~0+pData$group) 
-colnames(design_matrix) <- colnames(design_matrix) %>% str_replace("pData\\$group","") 
-names_for_contr <- resultsNames(dds) [-1] %>%
-  str_replace_all("group_","") %>% 
-  str_replace_all("_vs_","-")
-names_for_contr [3] <- "WT9-N9"
-contrast_obj <- makeContrasts(contrasts = names_for_contr, levels = colnames(design_matrix))
-group_obj <- as.factor(pData$group)
-
-#Prepare results object to help inform duplicate removal (by p-values)
-res <- res %>% 
-  mutate(rowname = str_c(`Mature miRNA`,`Precursor miRNA`, sep = "_")) 
-
-#finally map gene ids for the count matrix
-cnt_entrez <- dataNorm@assayData$normalizedCounts %>% 
-  as.data.frame() %>% 
-  rownames_to_column(var = "rowname") %>% 
-  left_join(dplyr::select(res,rowname,contains("padj"), contains("log2"))) %>% 
-  separate(rowname, into = c("mature","precursor"), sep = "_", remove = F) %>% 
-  #Remove miRNA that have no entrez annotation
-  filter(precursor %in% annot_no_na_or_dup$mirbase_id) %>% 
-  group_by(precursor) %>% 
-  arrange(padj.WTvsN,padj.WTvsUI,padj.NvsUI, desc(log2FoldChange.WTvsN),
-          desc(log2FoldChange.WTvsUI),.by_group = T) %>% 
-  dplyr::slice(1, .preserve = T) %>% 
-  dplyr::select(-matches("(padj)|(log2)")) %>% 
-  left_join(annot_no_na_or_dup, by = c("precursor" = "mirbase_id"))
-#Create the count matrix
-cnt_obj_filt <- cnt_entrez %>% 
-  ungroup() %>% 
-  dplyr::select(contains("9")) %>% 
-  as.matrix() 
-rownames(cnt_obj_filt) <- cnt_entrez$entrezgene_id
-#Create a dataframe for symbol mapping
-geneids_smbl <- data.frame(entrezid = cnt_entrez$entrezgene_id, symbol = cnt_entrez$hgnc_symbol)
-```
-
 Write all the necessary objects as text tables to combine with stranded library results
 ```{r write-tables, eval=FALSE}
-write.table(cnt_obj_filt, here::here("final clean figures/mirna_count_matrix_for_egsea.txt"),
+write.table(counts(dds), here::here("long_infection_human_reads/miRNA_library/results/final clean figures/tables/mirna_count_matrix_from_dds.txt"),
             sep = "\t", row.names = T)
-write.table(counts(dds), here::here("final clean figures/mirna_count_matrix_from_dds.txt"),
+write.table(normalizationFactors(dds), here::here("long_infection_human_reads/miRNA_library/results/final clean figures/tables/mirna_norm_factors_from_dds.txt"),
             sep = "\t", row.names = T)
-write.table(normalizationFactors(dds), here::here("final clean figures/mirna_norm_factors_from_dds.txt"),
-            sep = "\t", row.names = T)
-write_tsv(geneids_smbl, here::here("final clean figures/mirna_egsea_symbol_mapping.txt"))
 ```
 
 
