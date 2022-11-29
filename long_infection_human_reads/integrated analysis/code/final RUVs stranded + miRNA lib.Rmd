@@ -22,13 +22,21 @@ library(eulerr)
 library(tidyverse)
 library(ggprism)
 library(rcartocolor)
+```
+Define all helper functions and color choices
+```{r include=TRUE}
 theme_set(theme_prism(base_size = 14))
-mutate = dplyr::mutate
+#Set color choices from CARTOcolors
+discrete_pal_choice <- "Bold"
+cont_pal_choice <- "BluYl"
+diverg_pal_choice <- "Geyser"
+#Helper functions
+calc_relative <- function(x) x/sum(x) * 100
 ```
 
 The next step is to perform multimir analysis on the mRNA and miRNA data - identify potential regulation of mRNA by miRNA.
 Read in tables of differential expression results and extract DE genes.
-```{r multimir-prep}
+```{r multimir-prep-1}
 mi_res <- read.table(here::here("mirna_normalized results.txt"), sep = "\t", header = T)
 #Select just the upregulated and downregulated miRNA
 mi_filt_up <- mi_res %>% 
@@ -277,7 +285,7 @@ top_apop_mirna <- final_int %>%
 
 
 Perform functional profiling
-```{r clusterprofiler}
+```{r clusterprofiler-1}
 #Create a list of background genes detected in the experiment
 annot.bg.mir <- getBM(attributes=c('hgnc_symbol','mirbase_id'), filters='mirbase_id', values=mi_res$Precursor.miRNA, mart=mart) %>% 
   filter(nchar(hgnc_symbol) != 0)
