@@ -380,6 +380,8 @@ write.table(counts(dds), here::here("long_infection_human_reads/miRNA_library/re
             sep = "\t", row.names = T)
 write.table(normalizationFactors(dds), here::here("long_infection_human_reads/miRNA_library/results/final clean figures/tables/mirna_norm_factors_from_dds.txt"),
             sep = "\t", row.names = T)
+write.table(assay(rld), here::here("long_infection_human_reads/miRNA_library/results/final clean figures/tables/mirna_rld_count_matrix_from_dds.txt"),
+            sep = "\t", row.names = T)
 ```
 
 
