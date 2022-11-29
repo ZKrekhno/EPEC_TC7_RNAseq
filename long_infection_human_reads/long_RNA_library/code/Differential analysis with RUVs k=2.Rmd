@@ -595,3 +595,110 @@ write.table(normalizationFactors(dds), here::here("long_infection_human_reads/lo
             sep = "\t", row.names = T)
 write_tsv(geneids_smbl, here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/tables/egsea_symbol_mapping.txt"))
 ```
+
+Finally, run the ORA analysis on cluster profiler
+```{r clusterprofiler}
+h_sym <- read.gmt(here::here("long_infection_human_reads/long_RNA_library/data/h.all.v7.5.1.symbols.gmt"))
+kegg_sym <- read.gmt(here::here("long_infection_human_reads/long_RNA_library/data/c2.cp.v2022.1.Hs.symbols.gmt")) %>% 
+  filter(str_detect(term, "KEGG"))
+re_sym <- read.gmt(here::here("long_infection_human_reads/long_RNA_library/data/c2.cp.v2022.1.Hs.symbols.gmt")) %>% 
+  filter(str_detect(term, "REACTOME"))
+#Create a mapping for ID to symbol
+geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(res$`Gene ID`, "\\.[1-9]([0-9])?", ""), 
+                  keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first") %>% 
+  as.data.frame() %>% 
+  bind_cols(rownames(resWTNlfc)) %>% 
+  dplyr::select("symbol" = 1, "rowname" = `...2`)
+#Get nice names or keep ensembl IDs
+naOrDup <- is.na(geneids$symbol) | duplicated(geneids$symbol)
+geneids$gene_name <- ifelse(naOrDup, rownames(geneids), geneids$symbol)
+#Combine with DE table and use that for enrichment analysis
+res_symbol <- res %>% 
+  merge(geneids, by.x = "Gene ID", by.y = "rowname")
+#Prep objects for analysis - universe and DE genes
+universe <- res_symbol$gene_name
+de_genes <- res_df_list %>% 
+  map(~dplyr::filter(.x, abs(log2FoldChange) >= 0.5, padj < 0.05)) 
+de_genes_names <- de_genes %>% 
+  map(pull, gene)
+
+#prepare a combined list of databases and DE genes to analyze
+cluster_prep_list_names <- cross2(c("Hallmark","KEGG","Reactome"), names(de_genes_names)) %>%  
+  map_chr(purrr::reduce,str_c,sep = "_")
+cluster_prep_list <- cross2(list(hallmark = h_sym,kegg_sym,re_sym), de_genes_names) %>% 
+  set_names(cluster_prep_list_names)
+
+#Carry out clusterprofiler analysis ora
+cp_res_list <- cluster_prep_list %>% 
+  map(~enricher(.x [[2]], pvalueCutoff = 0.05, universe = universe, qvalueCutoff = 0.2,
+                TERM2GENE = .x [[1]]))
+
+cp_res_list_df <- cp_res_list %>% 
+  map(as.data.frame)
+#keep only successful annotations
+cp_res_suc <- cp_res_list %>% 
+  keep(~nrow(.x) >0)
+fold_changes_list <- de_genes %>% 
+  map(pull, var = "log2FoldChange") %>% 
+  map2(de_genes, ~set_names(.x, nm=.y$gene))
+fold_changes_list_for_heatplot <- cp_res_suc 
+for (i in seq_along(cp_res_suc)) {
+  cp_condition <- names(cp_res_suc) [i]
+  fold_change_vector <- keep(fold_changes_list, str_detect(cp_condition,names(fold_changes_list)))
+  fold_changes_list_for_heatplot [[i]] <- fold_change_vector
+}
+fold_changes_list_for_heatplot <- flatten(fold_changes_list_for_heatplot)
+#Plot the results as dotplots and heatplots
+#The heatplots are unlikely to be useful for anything, so don't bother making them super legible
+#pdf(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/clusterprofiler ORA analysis.pdf"),
+       #        width = 8, height = 6)
+walk2(cp_res_suc, names(cp_res_suc),
+      ~print(dotplot(.x) + 
+               scale_color_carto_c(palette = cont_pal_choice, direction = -1) +
+               labs(caption = .y)))
+pwalk(list(cp_res_suc, names(cp_res_suc), fold_changes_list_for_heatplot),
+      ~print(heatplot(..1, foldChange = ..3) + 
+               scale_fill_gradient2(low = carto_pal(7,diverg_pal_choice) [1],
+                                    mid = carto_pal(7,diverg_pal_choice) [4],
+                                    high = carto_pal(7,diverg_pal_choice) [7],
+                                    midpoint = 0,
+                                    name = bquote(~Log[2] ~ "Fold Change")) +
+               labs(caption = ..2)))
+#dev.off()
+```
+Finally, perform clusterprofiler comparison of biological themes
+```{r cp-biological-themes, fig.width=8, fig.height=6}
+biol_theme_pathway_list <- map(set_names(list(h_sym, kegg_sym, re_sym), 
+                                         nm = c("Hallmark","KEGG","Reactome")),
+                               ~compareCluster(de_genes_names, fun = "enricher",
+                                               TERM2GENE = .x, qvalueCutoff = 0.2,
+                                               pvalueCutoff = 0.05, universe = universe))
+biol_pw_df_list <- biol_theme_pathway_list %>% 
+  map(as.data.frame) %>% 
+  map(mutate, `Gene Ratio` = sapply(GeneRatio, function(x) eval(parse(text=x)))) %>% 
+  map(mutate, ID = str_wrap(str_replace_all(ID, "_"," "),20))
+#pdf(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/clusterprofiler Biological theme comparison.pdf"), width = 8, height = 6)
+walk(biol_pw_df_list,
+     ~print(ggplot(.x, aes(x=Cluster, y = ID, color = p.adjust, size = `Gene Ratio`)) +
+              geom_point() +
+              scale_size_continuous(range = c(4,8)) +
+              scale_color_carto_c(palette = cont_pal_choice, direction = -1) +
+              theme_minimal(base_size = 11) +
+              labs(x=element_blank(), y=element_blank()) +
+              scale_x_discrete(labels = c(WTN = bquote("WT vs" ~ Delta*"EscN EPEC"),
+                                          WTUI = "WT vs Uninfected",
+                                          NUI = bquote(Delta*"EscN EPEC vs Uninfected"))) +
+              theme(panel.border = element_rect(fill = NA, color = "black"),
+                    axis.text = element_text(color = "black"))))
+#dev.off()
+```
+Print all clusterprofiler results as tables
+```{r cp-print, eval=FALSE}
+walk2(keep(cp_res_list_df,~nrow(.)>0),names(keep(cp_res_list_df,~nrow(.)>0)),
+      ~write_csv(.x, here::here(str_c("long_infection_human_reads/long_RNA_library/results/final clean figures/tables/", .y, "-cp-.csv"))))
+walk2(biol_pw_df_list,names(biol_pw_df_list),
+      ~write_csv(.x, here::here(str_c("long_infection_human_reads/long_RNA_library/results/final clean figures/tables/", .y, "cp-biological_theme_comparison.csv"))))
+```
+
+
+
