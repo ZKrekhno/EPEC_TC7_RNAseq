@@ -1,0 +1,414 @@
+---
+title: "Combined analysis of miRNAseq and stranded library"
+output: 
+  html_notebook: 
+    fig_width: 12
+    fig_height: 10
+editor_options: 
+  chunk_output_type: console
+---
+```{r include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(include = TRUE)
+library(tidyverse)
+library(greekLetters)
+theme_set(theme_bw(base_size = 18))
+```
+
+Read in and prep the tables for analysis
+```{r prep-tbls}
+#Read in count matrices and merge them together
+c_mat <- read.table(here::here("count_matrix_from_dds.txt"), sep = "\t",
+                    header = T, row.names = 1)
+c_mat_mir <- read.table(here::here("mirna_count_matrix_from_dds.txt"), sep = "\t",
+                    header = T, row.names = 1)
+c_mat_comb <- rbind(c_mat, c_mat_mir)
+
+
+pData <- data.frame(genotype=vector(mode = "logical", length = ncol(c_mat)),
+                    timepoint = vector(mode = "logical", length = ncol(c_mat)),
+                    samples = colnames(c_mat),
+                    row.names = colnames(c_mat))
+pData <- pData %>% 
+  mutate(genotype = case_when(
+    str_detect(samples, "WT") ~ "WT",
+    str_detect(samples, "UI") ~ "UI",
+    str_detect(samples, "N") ~ "N"
+  ), timepoint = 9) %>%
+  dplyr::select(-samples)
+```
+Perform DE analysis
+
+```{r deseq}
+library(DESeq2)
+#Prepare the DESEq2 object and apply EDASeq normalization factors
+pData$group <- factor(paste0(pData$genotype,pData$timepoint))
+dds <- DESeqDataSetFromMatrix(countData = c_mat_comb,
+                              colData = pData,
+                              design = ~ group)
+dds$group <- relevel(dds$group, ref= "UI9")
+
+#Perform the DESEq2 analysis
+dds <- DESeq(dds)
+rld <- rlog(dds)
+
+normal_PCA <- plotPCA(rld, returnData = T, intgroup = "timepoint")
+#Plot the PCA graphs of the normalized counts
+#png(here::here("final clean figures/PCA plot of unnormalized counts.png"), 
+ # width = 12, height = 10, units = "in", res = 480)
+ggplot(data = normal_PCA, aes(shape = pData$genotype, color = pData$genotype)) +
+  scale_color_manual(name = "Infection status",
+                    labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
+                                "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
+                     values = c("UI" = "coral","WT" = "darkblue", "N" = "forestgreen")) +
+  geom_point(mapping = aes(x = PC1, y = PC2), size = 4) +
+  labs(title = "Raw DESeq2 PCA plot") +
+  scale_shape_manual(name = "Infection status",
+                     labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
+                                "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
+                     values = c("UI" = 15, "WT" = 16, "N" = 17))
+#dev.off()
+```
+
+Identify differentially expressed genes
+```{r deseq-res}
+resWTvsUI <- results(dds, contrast = c("group","WT9", "UI9"))
+resWTvsN <- results(dds, contrast = c("group","WT9", "N9"))
+resNvsUI <- results(dds, contrast = c("group","N9", "UI9"))
+res <- list(resWTvsUI,resWTvsN,resNvsUI) %>% 
+  map(as.data.frame) %>% 
+  map(rownames_to_column, var = "rowname") %>% 
+  purrr::reduce(left_join, by = "rowname") %>% 
+  rename_with(function(x) str_replace(x,"$",".NvsUI"),
+              .cols = !matches("\\.[xy]")) %>% 
+  rename_with(function(x) ifelse(str_detect(x,"\\.x"),
+                                 str_replace(x,"\\.x",".WTvsUI"),
+                                 str_replace(x,"\\.y",".WTvsN")),
+              .cols = matches("\\.[xy]")) %>% 
+  rename_with(function(x) "Gene ID",1)
+map(list(resWTvsUI,resWTvsN,resNvsUI),summary)
+#write.table(res, here::here("final clean figures/unnormalized results.txt"),
+            #sep = "\t", row.names = F)
+```
+
+Analyze PCA loadings with PCAtools
+```{r pcatools}
+library(PCAtools)
+cnts <- assay(rld)
+p <- pca(cnts,colData(dds), removeVar = 0.1)
+p$metadata$genotype <- p$metadata$genotype %>% as.factor() %>% fct_relevel("UI")
+#pdf(here::here("final clean figures/PCA tools analysis of PCA.pdf"), width = 12, height = 10)
+biplot(p, colby = "genotype", shape = "genotype", showLoadings = T,gridlines.major = FALSE)
+biplot(p, colby = "genotype", shape = "genotype",gridlines.major = FALSE)
+plotloadings(p,  rangeRetain = 0.01,
+    labSize = 4.0,
+    caption = "Top 1% variables")
+eigencorplot(p,
+             components = getComponents(p,c(1:9)),
+             metavars = c('group','genotype'))
+eigencorplot(p,
+             components = getComponents(p,1:9),
+    metavars = c('group','genotype'),
+    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
+    cexCorval = 1.2,
+    fontCorval = 2,
+    posLab = 'all',
+    rotLabX = 45,
+    scale = TRUE,
+    main = bquote(Principal ~ component ~ Pearson ~ r^2 ~ correlates),
+    plotRsquared = TRUE,
+    corFUN = 'pearson',
+    corUSE = 'pairwise.complete.obs',
+    corMultipleTestCorrection = 'BH',
+    signifSymbols = c('****', '***', '**', '*', ''),
+    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
+eigencorplot(p,
+             components = getComponents(p,1:9),
+    metavars = c('group','genotype'),
+    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
+    cexCorval = 1.2,
+    fontCorval = 2,
+    posLab = 'all',
+    rotLabX = 45,
+    scale = TRUE,
+    main = bquote(Principal ~ component ~ Pearson ~ r^2 ~ correlates),
+    plotRsquared = TRUE,
+    corFUN = 'pearson',
+    corUSE = 'pairwise.complete.obs',
+    corMultipleTestCorrection = 'none',
+    signifSymbols = c('****', '***', '**', '*', ''),
+    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
+#dev.off()
+```
+
+Read in count matrices for EGSEA and combine them
+```{r egsea-prep}
+library(limma)
+#remove intercept since this is a factor. Intercept or no intercept does not make a difference
+#That is what the 0+ means in the formula
+design_matrix <- model.matrix(~0+pData$group) 
+colnames(design_matrix) <- colnames(design_matrix) %>% str_replace("pData\\$group","") 
+names_for_contr <- resultsNames(dds) [-1] %>%
+  str_replace_all("group_","") %>% 
+  str_replace_all("_vs_","-")
+names_for_contr [3] <- "WT9-N9"
+contrast_obj <- makeContrasts(contrasts = names_for_contr, levels = colnames(design_matrix))
+group_obj <- as.factor(pData$group)
+#Read in the count matrices and symbol mapping
+c_mat_gs <- read.table(here::here("count_matrix_for_egsea.txt"), sep = "\t",
+                    header = T, row.names = 1)
+c_mat_mir_gs <- read.table(here::here("mirna_count_matrix_for_egsea.txt"), sep = "\t",
+                    header = T, row.names = 1)
+c_mat_gs_comb <- rbind(c_mat_gs,c_mat_mir_gs) %>% as.matrix()
+
+symb_gs <- read_table(here::here("egsea_symbol_mapping.txt"), col_types = cols("c","c"))
+symb_mir_gs <- read_table(here::here("mirna_egsea_symbol_mapping.txt"), col_types = cols("c","c"))
+symb_gs_comb <- rbind(symb_gs,symb_mir_gs)
+```
+
+Apply Egsea analysis
+
+```{r eggsea, eval=FALSE}
+library(EGSEA)
+#Move onto EGSEA analysis
+#Build gene set collection
+gs.annots <-  buildIdx(entrezIDs = rownames(c_mat_gs_comb), species = "human",
+msigdb.gsets = "none")
+
+
+#Perform the EGSEA analysis with voom built-in
+gsa <-  egsea.cnt(counts = c_mat_gs_comb, group = group_obj, design = design_matrix,
+  contrasts = contrast_obj, gs.annots = gs.annots, 
+  baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.1, combineMethod = "wilkinson",
+  num.threads = 4, report = TRUE, report.dir = here::here("final clean figures/all comparisons"),
+  verbose = T, display.top = 35)
+gsets <- read_tsv(here::here("final clean figures/all comparisons/ranked-gene-sets-base/ranked-kegg-gene-sets-WT9-N9.txt"))
+#pdf(here::here("final clean figures/egsea WTvsN top pathways.pdf"), width = 12, height = 12)
+ggplot(dplyr::slice(gsets,1:10),
+       aes(x=-log10(p.adj), y = fct_reorder(str_wrap(GeneSet,20),-log10(p.adj)), fill = as.character(direction))) +
+  geom_bar(stat = "identity", color = "black", lwd = 1) +
+  geom_vline(xintercept = 1, linetype = "longdash", color = "red2", lwd = 1.25) +
+  labs(title = "WT-N comparison \nmost significant affected pathways", y = '', fill = "Regulation direction") +
+  scale_fill_manual(values = c("-1" = "deepskyblue3","1" = "chocolate2"),
+                    labels = c("-1" = "Down-regulated","1" = "Upregulated")) +
+  theme_minimal(base_size = 22) + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank())
+#dev.off()
+```
+
+The next step is to perform multimir analysis on the mRNA and miRNA data - identify potential regulation of mRNA by miRNA.
+Read in tables of differential expression results and extract DE genes.
+```{r multimir-prep}
+mi_res <- read.table(here::here("mirna_Unnormalized results.txt"), sep = "\t", header = T)
+#Select just the upregulated and downregulated miRNA
+mi_filt_up <- mi_res %>% 
+  filter(padj.WTvsUI < 0.1 & log2FoldChange.WTvsUI > 0) 
+top_miRNA_up <- mi_filt_up$Mature.miRNA
+mi_filt_down <- mi_res %>% 
+  filter(padj.WTvsUI < 0.1 & log2FoldChange.WTvsUI < 0) 
+top_miRNA_down <- mi_filt_down$Mature.miRNA
+
+#select DE miRNA from WTvsN condition
+top_miRNA_WTvsN <- mi_res %>% 
+  filter(padj.WTvsN < 0.1) %>% 
+  select(Mature.miRNA, Precursor.miRNA)
+
+
+#Select just the upregulated and downregulated mRNA
+m_res <- read.table(here::here("Unnormalized results.txt"), sep = "\t", header = T) 
+m_filt_up <- m_res %>% 
+  filter(padj.WTvsUI < 0.1 & log2FoldChange.WTvsUI > 0) 
+top_mRNA_up <- str_remove(m_filt_up$Gene.ID,"\\.[1-9]([0-9])?") 
+m_filt_down <- m_res %>% 
+  filter(padj.WTvsUI < 0.1 & log2FoldChange.WTvsUI < 0) 
+top_mRNA_down <- m_filt_down$Gene.ID %>% str_remove("\\.[1-9]([0-9])?") 
+```
+
+Query the top miRNA hits with the multiMIR databases
+
+```{r echo=TRUE, results = 'markup', include=TRUE}
+library(multiMiR)
+library('org.Hs.eg.db')
+library(biomaRt)
+#Try to profile interactions between miRNA and DE genes (first match upregulated miRNA and downregulated mRNA)
+mlt_int_mi_up <- get_multimir(org     = "hsa",
+                         mirna   = top_miRNA_up,
+                         target  = top_mRNA_down,
+                         table   = "validated",
+                         summary = TRUE,
+                         predicted.cutoff.type = "p",
+                         predicted.cutoff      = 20,
+                         use.tibble = TRUE)
+inter_tbl_mi_up <- mlt_int_mi_up@data  %>% 
+  group_by(mature_mirna_id, target_symbol) %>% 
+  distinct(mature_mirna_id, target_ensembl) %>%
+  mutate(mirna_expression = "up", mRNA_expression = "down")
+
+#Now match downregulated miRNA and upregulated mRNA
+mlt_int_mi_down <- get_multimir(org     = "hsa",
+                         mirna   = top_miRNA_down,
+                         target  = top_mRNA_up,
+                         table   = "validated",
+                         summary = TRUE,
+                         predicted.cutoff.type = "p",
+                         predicted.cutoff      = 20,
+                         use.tibble = TRUE)
+inter_tbl_mi_down <- mlt_int_mi_down@data %>% 
+  group_by(mature_mirna_id, target_symbol) %>% 
+  distinct(mature_mirna_id, target_ensembl) %>%
+  mutate(mirna_expression = "down", mRNA_expression = "up")
+final_int <- rbind(inter_tbl_mi_up, inter_tbl_mi_down) %>% 
+  mutate(symbol = case_when(
+    nchar(target_symbol) == 0 ~ target_ensembl,
+    TRUE ~ target_symbol))
+#write.table(final_int, here::here("multimir miRNA-mRNA WTvsUI validated interactions.txt"), 
+ #           sep = "\t", row.names = F, quote = F)
+#Now we can make a table with attributes (gene species, and expression up, or down)
+top_mrna <-  final_int %>% 
+  ungroup() %>% 
+  dplyr::select(geneid = target_ensembl, expr = mRNA_expression, symbol) %>% 
+  mutate(species = "mrna") %>% 
+  filter(!duplicated(symbol))
+top_genes <- final_int %>% 
+  ungroup() %>% 
+  dplyr::select(geneid = mature_mirna_id,expr = mirna_expression) %>% 
+  mutate(species = "mirna", 
+         symbol = geneid) %>% 
+  filter(!duplicated(symbol)) %>% 
+  bind_rows(top_mrna)
+#Create a mapping for ID to genetype
+geneids <- mapIds(org.Hs.eg.db, keys = top_genes$geneid, 
+                  keytype = "ENSEMBL", column = "GENETYPE", multiVals = "first") %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "geneid") %>% 
+  dplyr::rename("biotype" = ".")
+#Apply the symbol mapping
+top_genes <- top_genes %>% 
+  left_join(geneids) %>% 
+  mutate(biotype = case_when(
+    is.na(biotype) ~ species,
+    TRUE ~ biotype
+  ))
+```
+
+Apply functional profiling to the identified clusters
+```{r clusterprofiler-prep}
+#Get the stranded and miRNA genes
+mrna_genes <- m_res %>% 
+  dplyr::select(geneid = Gene.ID,log2FoldChange.WTvsN) %>% 
+  mutate(geneid = str_remove(geneid, "\\.[1-9]([0-9])?")) %>% 
+  filter(geneid %in% top_genes$geneid) %>% 
+  left_join(dplyr::select(top_genes,geneid,symbol)) %>% 
+  dplyr::select(-geneid)
+#Map miRNA genes to their symbols
+#Create a mapping for miRNA ID to symbol
+#Prepare a mart object for mapping miRNA names to 
+mart <- useEnsembl(dataset = "hsapiens_gene_ensembl", biomart='ensembl')
+mirs <- top_genes [top_genes$species == "mirna",] $geneid %>% str_remove("-.p") %>% str_to_lower()
+annot <- getBM(attributes=c('hgnc_symbol','mirbase_id'), filters='mirbase_id', values=mirs, mart=mart) %>% 
+  filter(nchar(hgnc_symbol) != 0)
+
+mirna_genes <- mi_res %>% 
+  dplyr::select(geneid = Mature.miRNA,log2FoldChange.WTvsN) %>% 
+  filter(geneid %in% top_genes$geneid) %>% 
+  group_by(geneid) %>% 
+  slice_max(abs(log2FoldChange.WTvsN)) %>%  
+  mutate(precursor = str_to_lower(str_remove(geneid,"-.p"))) %>% 
+  left_join(annot, by = c("precursor" = "mirbase_id")) %>% 
+  filter(!is.na(hgnc_symbol), nchar(hgnc_symbol) != 0) %>% 
+  ungroup() %>% 
+  dplyr::select(log2FoldChange.WTvsN, symbol = hgnc_symbol)  
+#Join the gene list
+gl_df <- bind_rows(mrna_genes,mirna_genes) %>% 
+  arrange(desc(log2FoldChange.WTvsN))
+#Transform into the actual gene list object for clusterprofiler
+gl <- set_names(gl_df$log2FoldChange.WTvsN, nm = gl_df$symbol)
+```
+
+
+
+Read in the pathway collection information
+```{r clusterprofiler}
+library(clusterProfiler)
+library(enrichplot)
+#Read in set c5 from molecular signatures database - https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp#H
+#Biological pathway only
+c5 <- read.gmt(here::here("c5.go.bp.v7.5.1.symbols.gmt"))
+```
+
+Check which of the mRNA-miRNA association belong to apoptosis pathway
+```{r apop-intersect}
+top_genes_symbol <- top_genes %>% 
+  mutate(symbol1 = case_when(
+           biotype == "mirna" ~ str_to_lower(str_remove(geneid,"-.p")),
+           TRUE ~ symbol
+         )) %>% 
+  left_join(annot, by = c("symbol1" = "mirbase_id")) %>% 
+  mutate(symbol = case_when(
+    !is.na(hgnc_symbol) ~ hgnc_symbol,
+    TRUE ~ symbol
+  )) %>% 
+  select(-symbol1,-hgnc_symbol)
+#Identify genes with apoptotic annotation
+top_genes_annot <- top_genes_symbol %>% 
+  left_join(c5, by = c("symbol" = "gene")) %>% 
+  filter(str_detect(term, "APOP")) %>% 
+  distinct(symbol, .keep_all = T)
+#Mark genes with apoptotic annotation in attribute table and add graphic code
+top_genes_symbol <- top_genes_symbol %>% 
+  mutate(apop = case_when(
+    symbol %in% top_genes_annot$symbol ~ 
+      'circoschart: arcwidth=0.25 firstarc=0 colorlist="dodgerblue1" showlabels=false attributelist="circos"',
+    geneid %in% top_miRNA_WTvsN$Mature.miRNA ~ 
+      'circoschart: arcwidth=0.25 firstarc=0 colorlist="chocolate2" showlabels=false attributelist="circos"'
+  ), mapping_symbol = case_when(
+    biotype == "mirna" ~ str_remove(geneid, "hsa-"),
+    TRUE ~ symbol
+  )) 
+#Export the attribute table
+write.table(top_genes_symbol, here::here("attribute table for miRNA-mRNA.txt"), sep = "\t", row.names = F, quote = F)
+
+#Identify miRNA with apoptotic interactions
+top_apop <- top_genes_symbol %>% 
+  filter(!is.na(apop)) %>% 
+  dplyr::select(geneid)
+top_apop_mirna <- final_int %>% 
+  filter(mature_mirna_id %in% top_apop$geneid | target_ensembl %in% top_apop$geneid) %>% 
+  pull(mature_mirna_id) %>% 
+  unique() 
+#write.table(top_apop_mirna, here::here("final clean figures/miRNA with apoptotic associations.txt"))
+  
+```
+
+Perform functional profiling
+```{r clusterprofiler}
+#Perform ora analysis with clusterprofiler
+ora <- enricher(gl_df$symbol, TERM2GENE = c5)
+#GSEA analysis did not find any enriched terms here
+gsea.wtn <- GSEA(gl, TERM2GENE = c5,
+                 pvalueCutoff = 1)
+ora_mod <- ora
+rownames(ora_mod@result) <-  rownames(ora_mod@result) %>% 
+  str_remove("GOBP_")
+ora_mod@result$Description <-  ora_mod@result$Description %>% 
+  str_remove("GOBP_")
+ora_mod@result$ID<-  ora_mod@result$ID %>% 
+  str_remove("GOBP_")
+ora2 <- pairwise_termsim(ora_mod)
+#pdf(here::here("final clean figures/clusterprofiler WTvsN results ora analysis.pdf"),
+ #width = 12, height = 12)
+barplot(ora_mod, showCategory = 20)
+dotplot(ora_mod, showCategory = 20)
+cnetplot(ora_mod, foldChange=gl)
+heatplot(ora_mod, foldChange=gl, showCategory=20)
+heatplot(ora_mod, foldChange=gl, showCategory=5)
+heatplot(ora_mod, foldChange=gl, showCategory=10)
+treeplot(ora2,hclust_method = "average")
+upsetplot(ora)
+#dev.off()
+```
+
+
+
+
+
+

@@ -1,0 +1,439 @@
+---
+title: "Combined analysis of miRNAseq and RUVs-corrected stranded library"
+output: 
+  html_notebook: 
+    fig_width: 6
+    fig_height: 5
+editor_options: 
+  chunk_output_type: inline
+---
+```{r include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(include = TRUE)
+knitr::opts_chunk$set(fig.width = 6)
+knitr::opts_chunk$set(fig.height = 5)
+library(greekLetters)
+library(multiMiR)
+library('org.Hs.eg.db')
+library(biomaRt)
+library(clusterProfiler)
+library(enrichplot)
+library(eulerr)
+library(tidyverse)
+library(ggprism)
+library(rcartocolor)
+theme_set(theme_prism(base_size = 14))
+mutate = dplyr::mutate
+```
+
+The next step is to perform multimir analysis on the mRNA and miRNA data - identify potential regulation of mRNA by miRNA.
+Read in tables of differential expression results and extract DE genes.
+```{r multimir-prep}
+mi_res <- read.table(here::here("mirna_normalized results.txt"), sep = "\t", header = T)
+#Select just the upregulated and downregulated miRNA
+mi_filt_up <- mi_res %>% 
+  filter(padj.WTvsN < 0.1 & log2FoldChange.WTvsN > 0) %>% 
+  mutate(comb_name = str_c(Mature.miRNA,Precursor.miRNA, sep = "_"))
+mi_filt_down <- mi_res %>% 
+  filter(padj.WTvsN < 0.1 & log2FoldChange.WTvsN < 0) %>% 
+  mutate(comb_name = str_c(Mature.miRNA,Precursor.miRNA, sep = "_"))
+#identify miRNA that are not officially differentially expressed, but don't appear in both WTvsUI and NvsUI comparisons
+wt_de_mirna <- mi_res %>% 
+  filter(padj.WTvsUI < 0.1) %>% 
+  mutate(comb_name = str_c(Mature.miRNA,Precursor.miRNA, sep = "_"))
+n_de_mirna <- mi_res %>% 
+  filter(padj.NvsUI < 0.1) %>% 
+  mutate(comb_name = str_c(Mature.miRNA,Precursor.miRNA, sep = "_"))
+```
+
+Visualize DE miRNA across all comparisons
+```{r venns}
+de_mirna <- list(`WT vs EscN` = mi_filt_up$Mature.miRNA, `WT vs UI` = wt_de_mirna$Mature.miRNA, `EscN vs UI` = n_de_mirna$Mature.miRNA) %>% 
+  map(str_remove,"hsa-miR-")
+#pdf(here::here("final RUV figures/Venn diagrams of shared differentially expressed miRNA.pdf"), width = 12, height = 10)
+ggvenn(de_mirna, show_elements = F, text_size = 8, set_name_size = 11) + labs(title = "Shared DE miRNA")
+ggvenn(de_mirna, show_elements = T)
+#dev.off()
+```
+From this it is evident, that DE miRNA are quite different across conditions WtvsUI and EscNvsUI, so let's investigate why they don't show up as WTvsEscN
+```{r volcano-de}
+de_mirna_lfc <- bind_rows(mi_filt_up,wt_de_mirna,n_de_mirna) %>% 
+  distinct() %>% 
+  dplyr::select(comb_name, matches("log")) %>% 
+  pivot_longer(-c(comb_name),names_to = "LFC_comparison", values_to = "LFC")
+de_mirna_p <- bind_rows(mi_filt_up,wt_de_mirna,n_de_mirna) %>% 
+  distinct() %>% 
+  dplyr::select(comb_name, matches("padj")) %>% 
+  pivot_longer(-c(comb_name), names_to = "padj_comparison", values_to = "padj")
+de_mirna <- bind_cols(de_mirna_lfc,dplyr::select(de_mirna_p,-comb_name)) %>% 
+  mutate(comb_name = str_remove_all(comb_name,"hsa-mi[rR]-"),
+         LFC_comparison = str_remove(LFC_comparison, "log2FoldChange\\."))
+
+ggplot(de_mirna) + 
+  geom_point(aes(x=LFC,y=-log10(padj), color = LFC_comparison)) + 
+  geom_hline(aes(yintercept=1), linetype = "longdash", lwd = 1.2, color = "darkgrey") +
+  geom_vline(aes(xintercept=0.6), linetype = "longdash", lwd = 1.2, color = "darkgrey")+
+  geom_vline(aes(xintercept=-0.6), linetype = "longdash", lwd = 1.2, color = "darkgrey")+
+  facet_wrap(~fct_reorder(comb_name,-log10(padj)), scales = "free_y") + 
+  theme_bw(base_size = 18)
+ggsave(here::here("final RUV figures/Volcano plots of all DE miRNA.png"), width = 12, height = 10)
+```
+So I think, it is reasonable to select miRNA that are not shared between WTvsUI and EscNvsUI comparisons even though they don't pass FDR to be officially. Only choose the miRNA that have a reasonable log2fold change between WT and EscN - lfc of 0.4 (change of 1.3)
+```{r choose-top}
+de_mirna_choice <- bind_rows(mi_filt_up,wt_de_mirna,n_de_mirna) %>% 
+  distinct(Mature.miRNA, .keep_all = T)  
+#Create a vector to contain all chosen miRNA
+mirna_to_keep <- vector(mode ="character", length = nrow(de_mirna_choice))
+j <- 1
+#Populate the vector with chosen miRNA
+for (i in 1:nrow(de_mirna_choice)) {
+  if (de_mirna_choice$padj.WTvsN [i] < 0.1) {
+   mirna_to_keep [j] <- de_mirna_choice$Mature.miRNA [i] 
+   j <- j+1
+  } else if (abs(de_mirna_choice$log2FoldChange.WTvsN) [i] >= 0.4) {
+    mirna_to_keep [j] <- de_mirna_choice$Mature.miRNA [i] 
+   j <- j+1
+  }
+}
+#Get the top up and down regulated miRNA from the chosen vector
+mi_filt_up <- de_mirna_choice %>% 
+  filter(Mature.miRNA %in% mirna_to_keep & log2FoldChange.WTvsN > 0)
+top_miRNA_up <- mi_filt_up$Mature.miRNA
+mi_filt_down <- de_mirna_choice %>% 
+  filter(Mature.miRNA %in% mirna_to_keep & log2FoldChange.WTvsN < 0)
+top_miRNA_down <- mi_filt_down$Mature.miRNA
+```
+
+Next step is to prepare DE mRNA from WTvsN condition and perform multimiR analysis
+
+```{r multimir-prep}
+#Select just the upregulated and downregulated mRNA
+m_res <- read.table(here::here("RUV_normalized results.txt"), sep = "\t", header = T) 
+m_filt_up <- m_res %>% 
+  filter(padj.WTvsN < 0.1 & log2FoldChange.WTvsN > 0) 
+top_mRNA_up <- str_remove(m_filt_up$Gene.ID,"\\.[1-9]([0-9])?") 
+m_filt_down <- m_res %>% 
+  filter(padj.WTvsN < 0.1 & log2FoldChange.WTvsN < 0) 
+top_mRNA_down <- m_filt_down$Gene.ID %>% str_remove("\\.[1-9]([0-9])?") 
+```
+
+Query the top miRNA hits with the multiMIR databases
+
+```{r echo=TRUE, results = 'markup', include=TRUE}
+#Try to profile interactions between miRNA and DE genes (first match upregulated miRNA and downregulated mRNA)
+mlt_int_mi_up <- get_multimir(org     = "hsa",
+                         mirna   = top_miRNA_up,
+                         target  = top_mRNA_down,
+                         table   = "validated",
+                         summary = TRUE,
+                         predicted.cutoff.type = "p",
+                         predicted.cutoff      = 20,
+                         use.tibble = TRUE)
+inter_tbl_mi_up <- mlt_int_mi_up@data  %>% 
+  group_by(mature_mirna_id, target_symbol) %>% 
+  distinct(mature_mirna_id, target_ensembl) %>%
+  mutate(mirna_expression = "up", mRNA_expression = "down")
+
+#Now match downregulated miRNA and upregulated mRNA
+mlt_int_mi_down <- get_multimir(org     = "hsa",
+                         mirna   = top_miRNA_down,
+                         target  = top_mRNA_up,
+                         table   = "validated",
+                         summary = TRUE,
+                         predicted.cutoff.type = "p",
+                         predicted.cutoff      = 20,
+                         use.tibble = TRUE)
+inter_tbl_mi_down <- mlt_int_mi_down@data %>% 
+  group_by(mature_mirna_id, target_symbol) %>% 
+  distinct(mature_mirna_id, target_ensembl) %>%
+  mutate(mirna_expression = "down", mRNA_expression = "up")
+final_int <- rbind(inter_tbl_mi_up, inter_tbl_mi_down) %>% 
+  mutate(symbol = case_when(
+    nchar(target_symbol) == 0 ~ target_ensembl,
+    TRUE ~ target_symbol))
+#write.table(final_int, here::here("multimir miRNA-RUVsmRNA WTvsN validated interactions.txt"), 
+ #           sep = "\t", row.names = F, quote = F)
+#Now we can make a table with attributes (gene species, and expression up, or down)
+top_mrna <-  final_int %>% 
+  ungroup() %>% 
+  dplyr::select(geneid = target_ensembl, expr = mRNA_expression, symbol) %>% 
+  mutate(species = "mrna") %>% 
+  filter(!duplicated(symbol))
+top_genes <- final_int %>% 
+  ungroup() %>% 
+  dplyr::select(geneid = mature_mirna_id,expr = mirna_expression) %>% 
+  mutate(species = "mirna", 
+         symbol = geneid) %>% 
+  filter(!duplicated(symbol)) %>% 
+  bind_rows(top_mrna)
+#Create a mapping for ID to genetype
+geneids <- mapIds(org.Hs.eg.db, keys = top_genes$geneid, 
+                  keytype = "ENSEMBL", column = "GENETYPE", multiVals = "first") %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "geneid") %>% 
+  dplyr::rename("biotype" = ".")
+#Apply the symbol mapping
+top_genes <- top_genes %>% 
+  left_join(geneids) %>% 
+  mutate(biotype = case_when(
+    is.na(biotype) ~ species,
+    TRUE ~ biotype
+  ))
+```
+
+Apply functional profiling to the identified clusters
+```{r clusterprofiler-prep}
+#Get the stranded and miRNA genes
+mrna_genes <- m_res %>% 
+  dplyr::select(geneid = Gene.ID,log2FoldChange.WTvsN) %>% 
+  mutate(geneid = str_remove(geneid, "\\.[1-9]([0-9])?")) %>% 
+  filter(geneid %in% top_genes$geneid) %>% 
+  left_join(dplyr::select(top_genes,geneid,symbol)) %>% 
+  dplyr::select(-geneid)
+#Map miRNA genes to their symbols
+#Create a mapping for miRNA ID to symbol
+#Prepare a mart object for mapping miRNA names to 
+mart <- useEnsembl(dataset = "hsapiens_gene_ensembl", biomart='ensembl')
+mirs <- top_genes [top_genes$species == "mirna",] $geneid %>% str_remove("-.p") %>% str_to_lower()
+annot <- getBM(attributes=c('hgnc_symbol','mirbase_id'), filters='mirbase_id', values=mirs, mart=mart) %>% 
+  filter(nchar(hgnc_symbol) != 0)
+
+mirna_genes <- mi_res %>% 
+  dplyr::select(geneid = Mature.miRNA,log2FoldChange.WTvsN) %>% 
+  filter(geneid %in% top_genes$geneid) %>% 
+  group_by(geneid) %>% 
+  slice_max(abs(log2FoldChange.WTvsN)) %>%  
+  mutate(precursor = str_to_lower(str_remove(geneid,"-.p"))) %>% 
+  left_join(annot, by = c("precursor" = "mirbase_id")) %>% 
+  filter(!is.na(hgnc_symbol), nchar(hgnc_symbol) != 0) %>% 
+  ungroup() %>% 
+  dplyr::select(log2FoldChange.WTvsN, symbol = hgnc_symbol)  
+#Join the gene list
+gl_df <- bind_rows(mrna_genes,mirna_genes) %>% 
+  arrange(desc(log2FoldChange.WTvsN))
+#Transform into the actual gene list object for clusterprofiler
+gl <- set_names(gl_df$log2FoldChange.WTvsN, nm = gl_df$symbol)
+```
+
+
+
+Read in the pathway collection information
+```{r clusterprofiler}
+#Read in set c5 from molecular signatures database - https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp#H
+#Biological pathway only
+c5 <- read.gmt(here::here("c5.go.bp.v7.5.1.symbols.gmt"))
+h <- read.gmt(here::here("h.all.v7.5.1.symbols.gmt"))
+c2 <- read.gmt(here::here("c2.cp.kegg.v7.5.1.symbols.gmt"))
+```
+
+Check which of the mRNA-miRNA association belong to apoptosis pathway
+```{r apop-intersect}
+top_genes_symbol <- top_genes %>% 
+  mutate(symbol1 = case_when(
+           biotype == "mirna" ~ str_to_lower(str_remove(geneid,"-.p")),
+           TRUE ~ symbol
+         )) %>% 
+  left_join(annot, by = c("symbol1" = "mirbase_id")) %>% 
+  mutate(symbol = case_when(
+    !is.na(hgnc_symbol) ~ hgnc_symbol,
+    TRUE ~ symbol
+  )) %>% 
+  select(-symbol1,-hgnc_symbol)
+#Identify genes with apoptotic annotation
+top_genes_annot <- top_genes_symbol %>% 
+  left_join(c5, by = c("symbol" = "gene")) %>% 
+  left_join(h, by = c("symbol" = "gene"), suffix = c(".c5",".h")) %>% 
+  filter(str_detect(term.h, "APOP") | str_detect(term.c5, "APOP")) %>%
+  distinct(symbol, .keep_all = T)
+#Get a list of miRNA that pass FDR in WTvsN comparison
+fdr_wtvsn_mirna <- mi_res %>% 
+  filter(padj.WTvsN < 0.1) %>% 
+  pull(Mature.miRNA)
+#Mark genes with apoptotic annotation in attribute table and add graphic code
+top_genes_symbol <- top_genes_symbol %>% 
+  mutate(apop = case_when(
+    symbol %in% top_genes_annot$symbol ~ 
+      'circoschart: arcwidth=0.25 firstarc=0 colorlist="dodgerblue1" showlabels=false attributelist="circos"',
+    geneid %in% fdr_wtvsn_mirna ~ 
+      'circoschart: arcwidth=0.25 firstarc=0 colorlist="coral" showlabels=false attributelist="circos"'), 
+    mapping_symbol = case_when(
+    biotype == "mirna" ~ str_remove(geneid, "hsa-"),
+    TRUE ~ symbol
+  )) 
+#Export the attribute table
+#write.table(top_genes_symbol, here::here("attribute table for miRNA-RUVs mRNA.txt"), sep = "\t", row.names = F, quote = F)
+
+#Identify miRNA with apoptotic interactions
+top_apop <- top_genes_symbol %>% 
+  filter(!is.na(apop)) %>% 
+  dplyr::select(geneid)
+top_apop_mirna <- final_int %>% 
+  filter(mature_mirna_id %in% top_apop$geneid | target_ensembl %in% top_apop$geneid) %>% 
+  pull(mature_mirna_id) %>% 
+  unique() 
+#write.table(top_apop_mirna, here::here("final RUV figures/miRNA with apoptotic associations.txt"))
+```
+
+
+
+Perform functional profiling
+```{r clusterprofiler}
+#Create a list of background genes detected in the experiment
+annot.bg.mir <- getBM(attributes=c('hgnc_symbol','mirbase_id'), filters='mirbase_id', values=mi_res$Precursor.miRNA, mart=mart) %>% 
+  filter(nchar(hgnc_symbol) != 0)
+annot.bg.m <- mapIds(org.Hs.eg.db, keys = str_remove(m_res$Gene.ID,"\\.[1-9]([0-9])?"), 
+                  keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first") %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "geneid") %>% 
+  dplyr::rename("symbol" = ".") %>% 
+  filter(!is.na(symbol))
+
+ora <- vector(mode = "list",length = 3)
+sets <- list(h,c2,c5)
+for (i in 1:length(ora)) {
+  ora [[i]] <- enricher(gl_df$symbol, 
+                        TERM2GENE = sets [[i]], universe = c(annot.bg.m$symbol,annot.bg.mir$hgnc_symbol))
+}
+#pdf(here::here("final RUV figures/clusterprofiler WTvsN results ora analysis with defined background list.pdf"),
+#width = 8, height = 8)
+for (i in c(1,3)) {
+barplot(ora [[i]], showCategory = 20, font.size = 14) %>% print()
+dotplot(ora [[i]], showCategory = 20, font.size = 14) %>% print()
+cnetplot(ora [[i]], foldChange=gl, font.size = 14) %>% print()
+heatplot(ora [[i]], foldChange=gl, showCategory=5) %>% print()
+}
+#dev.off()
+#Now repeat with gsea analysis
+#Perform ora analysis with clusterprofiler
+gsea.wtn <- vector(mode = "list",length = 3)
+for (i in 1:length(gsea.wtn)) {
+  gsea.wtn [[i]] <- GSEA(gl, TERM2GENE = sets [[i]], pvalueCutoff = 1)
+}
+i=1
+#pdf(here::here("final RUV figures/clusterprofiler WTvsN results gsea analysis.pdf"),
+ #width = 8, height = 8)
+for (i in c(3)) {
+dotplot(gsea.wtn [[i]], showCategory = 20, font.size = 14) %>% print()
+cnetplot(gsea.wtn [[i]], foldChange=gl) %>% print()
+heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=20) %>% print()
+heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=5) %>% print()
+heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=10) %>% print()
+}
+#dev.off()
+```
+Repeat network analysis without separating up and down regulated genes
+
+```{r combined-search}
+mlt_int <- get_multimir(org     = "hsa",
+                         mirna   = c(top_miRNA_up, top_miRNA_down),
+                         target  = c(top_mRNA_down,top_mRNA_up),
+                         table   = "validated",
+                         summary = TRUE,
+                         predicted.cutoff.type = "p",
+                         predicted.cutoff      = 20,
+                         use.tibble = TRUE)
+inter_tbl <- mlt_int@data  %>% 
+  group_by(mature_mirna_id, target_symbol) %>% 
+  distinct(mature_mirna_id, target_ensembl) %>% 
+  mutate(symbol = case_when(
+    nchar(target_symbol) == 0 ~ target_ensembl,
+    TRUE ~ target_symbol))
+  
+#write.table(inter_tbl, here::here("multimir miRNA-RUVsmRNA WTvsN validated interactions combined search.txt"), 
+ #          sep = "\t", row.names = F, quote = F)
+#Now we can make a table with attributes (gene species, and expression up, or down)
+top_mrna <-  inter_tbl %>% 
+  ungroup() %>% 
+  dplyr::select(geneid = target_ensembl, symbol) %>% 
+  mutate(species = "mrna") %>% 
+  filter(!duplicated(symbol))
+top_genes <- inter_tbl %>% 
+  ungroup() %>% 
+  dplyr::select(geneid = mature_mirna_id) %>% 
+  mutate(species = "mirna", 
+         symbol = geneid) %>% 
+  filter(!duplicated(symbol)) %>% 
+  bind_rows(top_mrna) %>% 
+  mutate(express = case_when(
+    geneid %in% c(top_miRNA_up,top_mRNA_up) ~ "up",
+    geneid %in% c(top_miRNA_down,top_mRNA_down) ~ "down",
+  ))
+#Create a mapping for ID to genetype
+geneids <- mapIds(org.Hs.eg.db, keys = top_genes$geneid, 
+                  keytype = "ENSEMBL", column = "GENETYPE", multiVals = "first") %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "geneid") %>% 
+  dplyr::rename("biotype" = ".")
+#Apply the symbol mapping
+h_tnf <- h %>% filter(str_detect(term,"TNFA"))
+h_mtorc <- h %>% filter(str_detect(term,"MTORC1"))
+top_genes <- top_genes %>% 
+  left_join(geneids) %>% 
+  mutate(biotype = case_when(
+    is.na(biotype) ~ species,
+    TRUE ~ biotype
+  ),fdr = case_when(
+    geneid %in% fdr_wtvsn_mirna ~ 
+      'circoschart: arcwidth=0.25 firstarc=0 colorlist="coral" showlabels=false attributelist="circos"',
+    symbol %in% h_tnf$gene ~ 'circoschart: arcwidth=0.25 firstarc=0 colorlist="purple" showlabels=false attributelist="circos1"',
+    symbol %in% h_mtorc$gene ~ 'circoschart: arcwidth=0.25 firstarc=0 colorlist="brown" showlabels=false attributelist="circos1"'
+  ))
+m_res_ensembl <- m_res %>% 
+  mutate(Gene.ID = str_remove(Gene.ID,"\\.[1-9]([0-9])?"))
+top_genes_expr <- top_genes %>% 
+  left_join(dplyr::select(mi_res,Mature.miRNA,lfc =log2FoldChange.WTvsN),by = c("geneid" = "Mature.miRNA")) %>% 
+  left_join(dplyr::select(m_res_ensembl,Gene.ID,lfc =log2FoldChange.WTvsN),by = c("geneid" = "Gene.ID")) %>% 
+  mutate(lfc = case_when(
+    is.na(lfc.y) ~ lfc.x,
+    is.na(lfc.x) ~ lfc.y
+  ), .keep = "unused")
+#write.table(top_genes_expr, here::here("attribute table for combined miRNA-RUVs mRNA.txt"), sep = "\t", row.names = #F, quote = F)
+```
+
+```{r cluster-prof-2}
+top_genes_symbol <- top_genes_expr %>% 
+  mutate(symbol1 = case_when(
+           biotype == "mirna" ~ str_to_lower(str_remove(geneid,"-.p")),
+           TRUE ~ symbol
+         )) %>% 
+  left_join(annot, by = c("symbol1" = "mirbase_id")) %>% 
+  mutate(symbol = case_when(
+    !is.na(hgnc_symbol) ~ hgnc_symbol,
+    TRUE ~ symbol
+  )) %>% 
+  select(-symbol1,-hgnc_symbol) %>% 
+  arrange(-(lfc))
+gl <- set_names(top_genes_symbol$lfc, nm = top_genes_symbol$symbol)
+ora <- vector(mode = "list",length = 3)
+sets <- list(h,c2,c5)
+for (i in 1:length(ora)) {
+  ora [[i]] <- enricher(top_genes_symbol$symbol, 
+                        TERM2GENE = sets [[i]], universe = c(annot.bg.m$symbol,annot.bg.mir$hgnc_symbol))
+}
+#pdf(here::here("final RUV figures/clusterprofiler WTvsN combined search ora analysis with defined background list.pdf"),
+#width = 8, height = 5)
+for (i in 1) {
+barplot(ora [[i]], showCategory = 20, font.size = 14) %>% print()
+dotplot(ora [[i]], showCategory = 20, font.size = 14) %>% print()
+cnetplot(ora [[i]], foldChange=gl, font.size = 14) %>% print()
+heatplot(ora [[i]], foldChange=gl, showCategory=5) %>% print()
+}
+#dev.off()
+#Perform ora analysis with clusterprofiler
+gsea.wtn <- vector(mode = "list",length = 3)
+for (i in 1:length(gsea.wtn)) {
+  gsea.wtn [[i]] <- GSEA(gl, TERM2GENE = sets [[i]], pvalueCutoff = 1)
+}
+i=1
+#pdf(here::here("final RUV figures/clusterprofiler WTvsN combined search gsea analysis.pdf"),
+ #width = 8, height = 5)
+for (i in c(1,3)) {
+dotplot(gsea.wtn [[i]], showCategory = 20, font.size = 14) %>% print()
+cnetplot(gsea.wtn [[i]], foldChange=gl) %>% print()
+heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=20) %>% print()
+heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=5) %>% print()
+heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=10) %>% print()
+}
+#dev.off()
+```
+
