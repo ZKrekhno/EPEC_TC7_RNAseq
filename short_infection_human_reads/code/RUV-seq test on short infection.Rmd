@@ -80,7 +80,13 @@ pData <- pData %>%
     str_detect(samples, "45") ~ 45,
     str_detect(samples, "90") ~ 90,
     str_detect(samples, "180") ~ 180,
-  ), group = str_c(genotype,timepoint,sep = "")) %>% dplyr::select(-samples)
+  ), group = str_c(genotype,timepoint,sep = ""),
+  graph_cols = case_when(
+    str_detect(samples, "UI") ~ carto_pal(n=6, cont_pal_choice) [2],
+    str_detect(samples, "45") ~ carto_pal(n=6, cont_pal_choice) [4],
+    str_detect(samples, "90") ~ carto_pal(n=6, cont_pal_choice) [5],
+    str_detect(samples, "180") ~ carto_pal(n=6, cont_pal_choice) [6])) %>% 
+  dplyr::select(-samples)
 
 data <- newSeqExpressionSet(counts=c_mat,
                             phenoData=pData)
@@ -90,9 +96,8 @@ dataNorm <- betweenLaneNormalization(data, which="upper")
 dataOffset <- betweenLaneNormalization(data,
                                        which="upper",offset=TRUE)
 #Plot the counts 
-#pdf(here::here("final RUV figures/Normalization effect on the library.pdf"), width = 12, height = 10)
-graph_cols <- fct_recode(as.factor(pData$timepoint), "coral" = "0","darkblue" = "180", "forestgreen" = "90") %>% 
-  as.character()
+#pdf(here::here(str_c(res_path,"final RUV figures/Normalization effect on the library.pdf")), width = 8, height = 6)
+graph_cols <- pData$graph_cols
 plotPCA(data, col = graph_cols, main = "Unnormalized counts")
 plotPCA(dataOffset, col = graph_cols, main = "Normalized counts")
 plotRLE(data, col = graph_cols, main = "RLE Unnormalized counts")
