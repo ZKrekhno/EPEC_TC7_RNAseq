@@ -335,8 +335,7 @@ inter_tbl <- mlt_int@data  %>%
     nchar(target_symbol) == 0 ~ target_ensembl,
     TRUE ~ target_symbol))
   
-#write.table(inter_tbl, here::here("multimir miRNA-RUVsmRNA WTvsN validated interactions combined search.txt"), 
- #          sep = "\t", row.names = F, quote = F)
+#write.table(inter_tbl, here::here("long_infection_human_reads/integrated analysis/results/network/multimir miRNA-RUVsmRNA WTvsN validated interactions combined search.txt"), sep = "\t", row.names = F, quote = F)
 #Now we can make a table with attributes (gene species, and expression up, or down)
 top_mrna <-  inter_tbl %>% 
   ungroup() %>% 
@@ -383,7 +382,7 @@ top_genes_expr <- top_genes %>%
     is.na(lfc.y) ~ lfc.x,
     is.na(lfc.x) ~ lfc.y
   ), .keep = "unused")
-#write.table(top_genes_expr, here::here("attribute table for combined miRNA-RUVs mRNA.txt"), sep = "\t", row.names = #F, quote = F)
+#write.table(top_genes_expr, here::here("long_infection_human_reads/integrated analysis/results/network/attribute table for combined miRNA-RUVs mRNA.txt"), sep = "\t", row.names = F, quote = F)
 ```
 
 ```{r cluster-prof-2}
@@ -406,29 +405,16 @@ for (i in 1:length(ora)) {
   ora [[i]] <- enricher(top_genes_symbol$symbol, 
                         TERM2GENE = sets [[i]], universe = c(annot.bg.m$symbol,annot.bg.mir$hgnc_symbol))
 }
-#pdf(here::here("final RUV figures/clusterprofiler WTvsN combined search ora analysis with defined background list.pdf"),
-#width = 8, height = 5)
+#pdf(here::here("long_infection_human_reads/integrated analysis/results/clusterprofiler WTvsN combined search ora analysis with defined background list.pdf"), width = 8, height = 6)
 for (i in 1) {
-barplot(ora [[i]], showCategory = 20, font.size = 14) %>% print()
-dotplot(ora [[i]], showCategory = 20, font.size = 14) %>% print()
-cnetplot(ora [[i]], foldChange=gl, font.size = 14) %>% print()
-heatplot(ora [[i]], foldChange=gl, showCategory=5) %>% print()
-}
-#dev.off()
-#Perform ora analysis with clusterprofiler
-gsea.wtn <- vector(mode = "list",length = 3)
-for (i in 1:length(gsea.wtn)) {
-  gsea.wtn [[i]] <- GSEA(gl, TERM2GENE = sets [[i]], pvalueCutoff = 1)
-}
-i=1
-#pdf(here::here("final RUV figures/clusterprofiler WTvsN combined search gsea analysis.pdf"),
- #width = 8, height = 5)
-for (i in c(1,3)) {
-dotplot(gsea.wtn [[i]], showCategory = 20, font.size = 14) %>% print()
-cnetplot(gsea.wtn [[i]], foldChange=gl) %>% print()
-heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=20) %>% print()
-heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=5) %>% print()
-heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=10) %>% print()
+print(dotplot(ora [[i]], showCategory = 20, font.size = 14) +
+        scale_color_carto_c(palette = cont_pal_choice, direction = -1))
+print(heatplot(ora [[i]], foldChange=gl) + 
+        scale_fill_gradient2(high = carto_pal(7,diverg_pal_choice) [7],
+                             low =  carto_pal(7,diverg_pal_choice) [1],
+                             mid =  carto_pal(7,diverg_pal_choice) [4],
+                             midpoint = 0,
+                             name = bquote(Log[2] ~ "fold change")))
 }
 #dev.off()
 ```
