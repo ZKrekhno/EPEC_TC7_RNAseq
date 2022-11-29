@@ -23,6 +23,7 @@ library(eulerr)
 library(tidyverse)
 library(ggprism)
 library(rcartocolor)
+library(psych)
 ```
 Define all helper functions and color choices
 ```{r include=TRUE}
@@ -418,29 +419,7 @@ print(heatplot(ora [[i]], foldChange=gl) +
 }
 #dev.off()
 ```
-Attempt Spearman-Ward analysis of the integrative analysis
-Select miRNA and mRNA to cluster.
-Use top_miRNA and top_mRNA objects
-```{r prep-mats}
-#Import count matrices - use RUVs batch corrected counts for mRNA and regular rld counts for miRNA
-rld_mrna <- read.table(here::here("long_infection_human_reads/integrated analysis/data/rld_count_matrix_RUV_corrected.txt"))
-#Import mapping for ID to symbol
-mrna_mapping <- read_tsv(here::here("long_infection_human_reads/integrated analysis/data/ensembl_to_hgnc_mapping.tsv"))
-#Add symbols to the results table and get the de genes of interes
-mrna_df <- rld_mrna %>% 
-  as_tibble(rownames = "gene") %>% 
-  filter(str_remove(gene, "\\.[1-9]([0-9])?") %in% c(top_mRNA_up,top_mRNA_down)) %>% 
-  mutate(ensembl = str_remove(gene, "\\.[1-9]([0-9])?")) %>% 
-  left_join(mrna_mapping, by = c("ensembl" = "name")) %>% 
-  mutate(final_symbol = ifelse(is.na(value) | duplicated(value),
-                               ensembl, value))
 
-#Import transformed miRNA matrix
-rld_miRNA <- read.table(here::here("long_infection_human_reads/integrated analysis/data/mirna_rld_count_matrix_from_dds.txt"))
-#Now select just the mRNA and miRNA of interest and continue to Spearman
-mir_df <- rld_miRNA %>% 
-  as_tibble(rownames = "comb")
-mir_df_top <- mir_df %>% 
-  filter(comb %in% mi_filt_up$comb_name | comb %in% mi_filt_down$comb_name)
-```
+
+
 
