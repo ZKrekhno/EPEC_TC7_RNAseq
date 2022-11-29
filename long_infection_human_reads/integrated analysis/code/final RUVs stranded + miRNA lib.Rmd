@@ -119,7 +119,7 @@ Next step is to prepare DE mRNA from WTvsN condition and perform multimiR analys
 
 ```{r multimir-prep}
 #Select just the upregulated and downregulated mRNA
-m_res <- read.table(here::here("RUV_normalized results.txt"), sep = "\t", header = T) 
+m_res <- read.csv(here::here("long_infection_human_reads/integrated analysis/data/RUVs normalized results.csv"), header = T) 
 m_filt_up <- m_res %>% 
   filter(padj.WTvsN < 0.1 & log2FoldChange.WTvsN > 0) 
 top_mRNA_up <- str_remove(m_filt_up$Gene.ID,"\\.[1-9]([0-9])?") 
