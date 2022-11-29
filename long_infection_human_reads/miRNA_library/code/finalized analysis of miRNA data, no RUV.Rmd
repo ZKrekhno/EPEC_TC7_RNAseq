@@ -226,7 +226,7 @@ resWTvsN.new <- results(dds.new, contrast = c("group","WT9", "N9"))
 resNvsUI.new <- results(dds.new, contrast = c("group","N9", "UI9"))
 summary(resWTvsUI.new)
 summary(resWTvsN.new)
-#Removing top 2 miRNA does not affect differential expression analysis, so keep them in
+#Removing top 2 miRNA does not really affect differential expression analysis, so keep them in
 ```
 
 Perform PCA tools analysis of the data
@@ -235,36 +235,60 @@ cnts <- assay(rld)
 #Confirm that that the mapping is correct
 rownames(cnts) <- rownames(cnts) %>% str_replace_all("hsa-","")
 p <- pca(cnts,colData(dds), removeVar = 0.1)
-p$metadata$genotype <- p$metadata$genotype %>% as.factor() %>% fct_relevel("UI")
-#pdf(here::here("final clean figures/PCA tools analysis of PCA.pdf"), width = 12, height = 10)
-biplot(p, colby = "genotype", shape = "genotype", showLoadings = T,gridlines.major = FALSE)
-biplot(p, colby = "genotype", shape = "genotype",gridlines.major = FALSE)
+pca_coord_meta <- p$rotated %>% 
+  merge(as.data.frame(colData(rld2.nobatch)), by = 0) %>% 
+  mutate(group = fct_relevel(group, "WT9"))
+#Create the lists to store information on the linear model performance
+fit_list <- set_names(vector(mode = "list", length = 9),
+                              nm = str_c("PC",1:9))
+signi_list <- set_names(vector(mode = "list", length = 9),
+                              nm = str_c("PC",1:9))
+#Run linear regression for each principal component
+for (PC in seq_along(fit_list)) {
+  frm <- as.formula(str_c("PC",PC, " ~ group"))
+  fit_list [[PC]] <- lm(frm, data = pca_coord_meta)
+  sum_of_fit <- summary(fit_list [[PC]])
+  signi_list [[PC]] <- sum_of_fit$coefficients %>% 
+    as.data.frame() %>% 
+    mutate(R_squared = sum_of_fit$r.squared)
+}
+#Simplify the lists
+#Summarise liner model performance and plot the results
+signi_list_reduced <- signi_list %>% 
+  map2(names(signi_list), ~mutate(.x, PC = .y)) %>% 
+  map(rownames_to_column, var = "coef") %>% 
+  purrr::reduce(bind_rows) %>% 
+  filter(coef != "(Intercept)") %>% 
+  dplyr::rename(p = `Pr(>|t|)`) %>%  
+  mutate(signi = case_when(
+    p < 0.05 ~ "yes",
+    TRUE ~ "no"
+  ))
+#Plot the results of regression
+ggplot(signi_list_reduced) +
+  geom_tile(aes(y=coef,x=PC, fill = p)) +
+  geom_text(data = filter(signi_list_reduced, signi == "yes"), aes(y=coef,x=PC), 
+            label = "*", color = "white", size = 13) +
+  labs(x = element_blank(), y = element_blank(), title = "Linear regression analysis\nidentifying relationships between metadata and PC") +
+  scale_y_discrete(labels = c(groupUI9 = "Effect of Infection",groupN9 = "Effect of T3SS")) +
+  scale_fill_carto_c(palette = "BluYl", direction = -1, name = "p-value") +
+  theme_minimal(base_size = 14) +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        axis.ticks.x = element_line(color = "black"),
+        axis.ticks.y = element_line(color = "black"),
+        panel.grid.major = element_blank(),
+        axis.text = element_text(color = "black"),
+        title = element_text(size = 8),
+        legend.title = element_text(size = 14))
+#ggsave(here::here("long_infection_human_reads/miRNA_library/results/final clean figures/Linear regression of metadata and PCA.png"), width = 6,height = 2.5, dpi = 1080)
+```
+
+
+```{r pcatools-loadings-plot, fig.width=9, fig.height=6}
 plotloadings(p,  rangeRetain = 0.01,
-    labSize = 4.0,
-    caption = "Top 1% variables")
-eigencorplot(p,
-             components = getComponents(p,c(1:9)),
-             metavars = c('group','genotype'))
-eigencorplot(p,
-             components = getComponents(p,1:9),
-    metavars = c('group','genotype'),
-    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
-    cexCorval = 2,
-    cexLabX = 1.8,
-    cexLabY = 1.8,
-    cexLabColKey = 1.8,
-    fontCorval = 2,
-    posLab = 'bottomleft',
-    rotLabX = 45,
-    scale = TRUE,
-    main = bquote(Principal ~ component ~ Pearson ~ r^2 ~ correlates),
-    plotRsquared = TRUE,
-    corFUN = 'pearson',
-    corUSE = 'pairwise.complete.obs',
-    corMultipleTestCorrection = 'BH',
-    signifSymbols = c('****', '***', '**', '*', ''),
-    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
-#dev.off()
+    labSize = 2.5, col = carto_pal(3,diverg_pal_choice) ,
+    caption = "Top 1% variables") + theme(legend.title = element_text())
+#ggsave(here::here("long_infection_human_reads/miRNA_library/results/final clean figures/PCA plot loadins.png"), width = 9, height = 6, dpi = 1080)
 ```
 
 Perform volcano plot analysis of the data
@@ -296,6 +320,74 @@ top_list <- list("WTN" = resWTNlfc,"WTUI" = resWTUIlfc, "NUI" = resNUIlfc) %>%
 results_list <- list(resWTNlfc,resWTUIlfc,resNUIlfc)
 #Replace the rownames with gene names
 for (i in 1:3) {rownames(results_list [[i]]) <- geneids$symbol}
+#Prepare the results list for plotting
+res_df_list <- results_list %>% 
+  map(as.data.frame) %>% 
+  map(rownames_to_column, var = "gene") %>% 
+  map(mutate, signi = if_else(padj < 0.05 & abs(log2FoldChange) >= 0.5, "yes","no"))
+
+#Create the function for making a nice volcano plot
+volcano_ggplot <- function(res_df, title = "", to_label = F, n_lab = 10) {
+  p_empty <- ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), fill = signi, color = signi)) +
+    geom_hline(yintercept = -log10(0.05), lty = 2, lwd = 0.8, color = "grey30") +
+    geom_vline(xintercept = -0.5, lty = 2, lwd = 0.8, color = "grey30") +
+    geom_vline(xintercept = 0.5, lty = 2, lwd = 0.8, color = "grey30") +
+    geom_point(size = 4, shape = 21, alpha = 0.7) +
+    scale_color_manual(values = c("darkgrey", carto_pal(7,diverg_pal_choice) [7])) +
+    scale_fill_manual(values = c("darkgrey", carto_pal(7,diverg_pal_choice) [7])) +
+    guides(color = 'none', fill = 'none') +
+    labs(x = bquote(~Log[2] ~ "fold change"),
+         y = bquote(~-Log[10] ~ italic(P)),
+         title = title) +
+    theme_prism(base_size = 24) +
+    theme(title = element_text(size = 10),
+          axis.title = element_text(size = 24))
+  if(to_label) {
+    res_df_top <- res_df %>% 
+      filter(signi == "yes") %>% 
+      arrange(desc(abs(log2FoldChange))) %>% 
+      slice_head(n=n_lab)
+    p_labelled <- p_empty + 
+      geom_label_repel(data = res_df_top, aes(x = log2FoldChange, y = -log10(padj), label = gene),
+                       size = 4, max.overlaps = Inf, color = "black", fill = "white")
+    return(p_labelled)
+  } else {
+    return(p_empty)
+  }
+}
+#Print the volcano plots - each should get its own png file
+volcano_list <- map2(res_df_list, 
+                     list(paste0("WT infection vs ", greeks("Delta"),  "EscN infection"),
+                          "WT infection vs Uninfected cells",
+                          paste0(greeks("Delta"),"EscN infection vs Uninfected cells")),
+                     volcano_ggplot)
+#Save each as a png
+#walk2(volcano_list, names(volcano_list),
+ #     ~ggsave(here::here(str_c("long_infection_human_reads/long_RNA_library/results/final clean figures/",.y, " Volcano plot.png")),.x,
+  #            width = 8, height = 6, dpi = 1080))
+#Repeat the same with adding top 10 DE genes
+volcano_list_labelled <- map2(res_df_list, 
+                     list(paste0("WT infection vs ", greeks("Delta"),  "EscN infection"),
+                          "WT infection vs Uninfected cells",
+                          paste0(greeks("Delta"),"EscN infection vs Uninfected cells")),
+                     volcano_ggplot, to_label = T, n_lab = 10)
+#walk2(volcano_list_labelled, names(volcano_list_labelled),
+ #     ~ggsave(here::here(str_c("long_infection_human_reads/long_RNA_library/results/final clean figures/",
+  #                             .y,
+   #                            " Volcano plot with labels.png")),.x,
+    #          width = 8, height = 6, dpi = 1080))
+
+
+#pdf(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/MA plots.pdf"), width = 6, height = 5)
+DESeq2::plotMA(resWTvsN, main = paste0("WT infection vs ", greeks("Delta"),  "EscN infection\nResults without shrinking"))
+DESeq2::plotMA(resWTNlfc, main = paste0("WT infection vs ", greeks("Delta"),  "EscN infection\nResults after apeglm shrinking"))
+DESeq2::plotMA(resWTvsUI, main = "WT infection vs Uninfected cells \nResults without shrinking")
+DESeq2::plotMA(resWTUIlfc, main = "WT infection vs Uninfected cells \nResults after apeglm shrinking")
+#dev.off()
+```
+
+
+```{r old-volcano}
 #pdf(here::here("final clean figures/Volcano plots.pdf"), width = 12, height = 10)
 plotMA(resWTvsN, main = paste0("WT infection vs ", greeks("Delta"),  "EscN infection\nResults without shrinking"))
 plotMA(resWTNlfc, main = paste0("WT infection vs ", greeks("Delta"),  "EscN infection\nResults after apeglm shrinking"))
