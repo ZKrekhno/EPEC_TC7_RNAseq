@@ -227,7 +227,12 @@ Analyze loadings of the principal components in the data
 #Have to remove the chromosome part from ENSEMBL ID (so whatever comes after the period)
 geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(rownames(counts(dds)), "\\.[1-9]([0-9])?", ""), 
                   keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first")
+#Print geneids
+#write_tsv(enframe(geneids),here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/tables/ensembl_to_hgnc_mapping.tsv"))
+```
 
+
+```{r pcatools-continued, fig.width=6, fig.height=2.5}
 cnts <- assay(rld2.nobatch)
 #Confirm that that the mapping is correct
 all(str_replace_all(rownames(counts(dds)), "\\.[1-9]([0-9])?", "") == names(geneids))
