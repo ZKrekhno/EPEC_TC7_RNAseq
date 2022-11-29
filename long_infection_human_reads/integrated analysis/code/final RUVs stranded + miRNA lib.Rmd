@@ -18,6 +18,7 @@ library('org.Hs.eg.db')
 library(biomaRt)
 library(clusterProfiler)
 library(enrichplot)
+library(ggvenn)
 library(eulerr)
 library(tidyverse)
 library(ggprism)
@@ -37,7 +38,7 @@ calc_relative <- function(x) x/sum(x) * 100
 The next step is to perform multimir analysis on the mRNA and miRNA data - identify potential regulation of mRNA by miRNA.
 Read in tables of differential expression results and extract DE genes.
 ```{r multimir-prep-1}
-mi_res <- read.table(here::here("mirna_normalized results.txt"), sep = "\t", header = T)
+mi_res <- read.csv(here::here("long_infection_human_reads/integrated analysis/data/mirna_normalized results.csv"), header = T)
 #Select just the upregulated and downregulated miRNA
 mi_filt_up <- mi_res %>% 
   filter(padj.WTvsN < 0.1 & log2FoldChange.WTvsN > 0) %>% 
@@ -55,10 +56,10 @@ n_de_mirna <- mi_res %>%
 ```
 
 Visualize DE miRNA across all comparisons
-```{r venns}
+```{r venns, fig.width=12, fig.height=10}
 de_mirna <- list(`WT vs EscN` = mi_filt_up$Mature.miRNA, `WT vs UI` = wt_de_mirna$Mature.miRNA, `EscN vs UI` = n_de_mirna$Mature.miRNA) %>% 
   map(str_remove,"hsa-miR-")
-#pdf(here::here("final RUV figures/Venn diagrams of shared differentially expressed miRNA.pdf"), width = 12, height = 10)
+#pdf(here::here("long_infection_human_reads/integrated analysis/results/Venn diagrams of shared differentially expressed miRNA.pdf"), width = 12, height = 10)
 ggvenn(de_mirna, show_elements = F, text_size = 8, set_name_size = 11) + labs(title = "Shared DE miRNA")
 ggvenn(de_mirna, show_elements = T)
 #dev.off()
