@@ -115,7 +115,7 @@ mi_filt_down <- de_mirna_choice %>%
 top_miRNA_down <- mi_filt_down$Mature.miRNA
 ```
 
-Next step is to prepare DE mRNA from WTvsN condition and perform multimiR analysis
+Next step is to prepare DE mRNA from WTvsN condition and perform multimiR analysis. Selecting DE with looser parameters to capture more potential relationships.
 
 ```{r multimir-prep}
 #Select just the upregulated and downregulated mRNA
@@ -162,8 +162,7 @@ final_int <- rbind(inter_tbl_mi_up, inter_tbl_mi_down) %>%
   mutate(symbol = case_when(
     nchar(target_symbol) == 0 ~ target_ensembl,
     TRUE ~ target_symbol))
-#write.table(final_int, here::here("multimir miRNA-RUVsmRNA WTvsN validated interactions.txt"), 
- #           sep = "\t", row.names = F, quote = F)
+#write.table(final_int, here::here("long_infection_human_reads/integrated analysis/results/network/multimir miRNA-RUVsmRNA WTvsN validated interactions.txt"), sep = "\t", row.names = F, quote = F)
 #Now we can make a table with attributes (gene species, and expression up, or down)
 top_mrna <-  final_int %>% 
   ungroup() %>% 
@@ -192,7 +191,7 @@ top_genes <- top_genes %>%
   ))
 ```
 
-Apply functional profiling to the identified clusters
+Apply functional profiling to the identified clusters. #008080,#70a494,#b4c8a8,#f6edbd,#edbb8a,#de8a5a,#ca562c
 ```{r clusterprofiler-prep}
 #Get the stranded and miRNA genes
 mrna_genes <- m_res %>% 
@@ -232,9 +231,9 @@ Read in the pathway collection information
 ```{r clusterprofiler}
 #Read in set c5 from molecular signatures database - https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp#H
 #Biological pathway only
-c5 <- read.gmt(here::here("c5.go.bp.v7.5.1.symbols.gmt"))
-h <- read.gmt(here::here("h.all.v7.5.1.symbols.gmt"))
-c2 <- read.gmt(here::here("c2.cp.kegg.v7.5.1.symbols.gmt"))
+c5 <- read.gmt(here::here("long_infection_human_reads/integrated analysis/data/c5.go.bp.v7.5.1.symbols.gmt"))
+h <- read.gmt(here::here("long_infection_human_reads/integrated analysis/data/h.all.v7.5.1.symbols.gmt"))
+c2 <- read.gmt(here::here("long_infection_human_reads/integrated analysis/data/c2.cp.kegg.v7.5.1.symbols.gmt"))
 ```
 
 Check which of the mRNA-miRNA association belong to apoptosis pathway
@@ -258,7 +257,7 @@ top_genes_annot <- top_genes_symbol %>%
   distinct(symbol, .keep_all = T)
 #Get a list of miRNA that pass FDR in WTvsN comparison
 fdr_wtvsn_mirna <- mi_res %>% 
-  filter(padj.WTvsN < 0.1) %>% 
+  filter(padj.WTvsN < 0.05) %>% 
   pull(Mature.miRNA)
 #Mark genes with apoptotic annotation in attribute table and add graphic code
 top_genes_symbol <- top_genes_symbol %>% 
@@ -272,7 +271,7 @@ top_genes_symbol <- top_genes_symbol %>%
     TRUE ~ symbol
   )) 
 #Export the attribute table
-#write.table(top_genes_symbol, here::here("attribute table for miRNA-RUVs mRNA.txt"), sep = "\t", row.names = F, quote = F)
+#write.table(top_genes_symbol, here::here("long_infection_human_reads/integrated analysis/results/network/attribute table for miRNA-RUVs mRNA.txt"), sep = "\t", row.names = F, quote = F)
 
 #Identify miRNA with apoptotic interactions
 top_apop <- top_genes_symbol %>% 
@@ -282,13 +281,13 @@ top_apop_mirna <- final_int %>%
   filter(mature_mirna_id %in% top_apop$geneid | target_ensembl %in% top_apop$geneid) %>% 
   pull(mature_mirna_id) %>% 
   unique() 
-#write.table(top_apop_mirna, here::here("final RUV figures/miRNA with apoptotic associations.txt"))
+#write.table(top_apop_mirna, here::here("long_infection_human_reads/integrated analysis/results/network/miRNA with apoptotic associations.txt"))
 ```
 
 
 
 Perform functional profiling
-```{r clusterprofiler-1}
+```{r clusterprofiler-1, fig.width=8, fig.height=6}
 #Create a list of background genes detected in the experiment
 annot.bg.mir <- getBM(attributes=c('hgnc_symbol','mirbase_id'), filters='mirbase_id', values=mi_res$Precursor.miRNA, mart=mart) %>% 
   filter(nchar(hgnc_symbol) != 0)
@@ -305,30 +304,16 @@ for (i in 1:length(ora)) {
   ora [[i]] <- enricher(gl_df$symbol, 
                         TERM2GENE = sets [[i]], universe = c(annot.bg.m$symbol,annot.bg.mir$hgnc_symbol))
 }
-#pdf(here::here("final RUV figures/clusterprofiler WTvsN results ora analysis with defined background list.pdf"),
-#width = 8, height = 8)
+#pdf(here::here("long_infection_human_reads/integrated analysis/results/clusterprofiler WTvsN results ora analysis with defined background list.pdf"), width = 8, height = 6)
 for (i in c(1,3)) {
-barplot(ora [[i]], showCategory = 20, font.size = 14) %>% print()
-dotplot(ora [[i]], showCategory = 20, font.size = 14) %>% print()
-cnetplot(ora [[i]], foldChange=gl, font.size = 14) %>% print()
-heatplot(ora [[i]], foldChange=gl, showCategory=5) %>% print()
-}
-#dev.off()
-#Now repeat with gsea analysis
-#Perform ora analysis with clusterprofiler
-gsea.wtn <- vector(mode = "list",length = 3)
-for (i in 1:length(gsea.wtn)) {
-  gsea.wtn [[i]] <- GSEA(gl, TERM2GENE = sets [[i]], pvalueCutoff = 1)
-}
-i=1
-#pdf(here::here("final RUV figures/clusterprofiler WTvsN results gsea analysis.pdf"),
- #width = 8, height = 8)
-for (i in c(3)) {
-dotplot(gsea.wtn [[i]], showCategory = 20, font.size = 14) %>% print()
-cnetplot(gsea.wtn [[i]], foldChange=gl) %>% print()
-heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=20) %>% print()
-heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=5) %>% print()
-heatplot(gsea.wtn [[i]], foldChange=gl, showCategory=10) %>% print()
+print(dotplot(ora [[i]], showCategory = 20, font.size = 14) +
+        scale_color_carto_c(palette = cont_pal_choice, direction = -1))
+print(heatplot(ora [[i]], foldChange=gl) + 
+        scale_fill_gradient2(high = carto_pal(7,diverg_pal_choice) [7],
+                             low =  carto_pal(7,diverg_pal_choice) [1],
+                             mid =  carto_pal(7,diverg_pal_choice) [4],
+                             midpoint = 0,
+                             name = bquote(Log[2] ~ "fold change")))
 }
 #dev.off()
 ```
