@@ -528,30 +528,39 @@ walk2(list(gsets_wt_n, gsets_wt_ui, gsets_n_ui), c("WT-N","WT-UI", "N-UI"),
 #dev.off()
 ```
 
-```{r egsea-msigdb-h, eval=FALSE}
+```{r egsea-msigdb-h, eval=FALSE, fig.width=8, fig.height=6}
 #Move onto EGSEA analysis with hallmark gene sets
 
 #Build gene set collection
-gs.annots.h <-  buildGMTIdx(geneIDs = rownames(cnt_obj_filt), species = "Human", gmt.file = here::here("h.all.v7.5.1.entrez.gmt"))
+gs.annots.h <-  buildGMTIdx(geneIDs = rownames(cnt_obj_filt), species = "Human", 
+                            gmt.file = here::here("long_infection_human_reads/long_RNA_library/data/h.all.v7.5.1.entrez.gmt"))
 
 gsa.h <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_matrix,
-  contrasts = contrast_obj, gs.annots = gs.annots.h, symbolsMap = geneids_smbl,
- baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.1, combineMethod = "wilkinson",
-  num.threads = 4, report = TRUE, report.dir = here::here("final RUV figures/all comparisons MSIGDB Hallmark"),
-  verbose = T, display.top = 35)
-gsets.h <- read_tsv(here::here("final RUV figures/all comparisons MSIGDB Hallmark/ranked-gene-sets-base/ranked-gmtcustom-gene-sets-WT9-N9.txt"))
-#pdf(here::here("final RUV figures/egsea hallmark WTvsN top pathways.pdf"), width = 14, height = 18)
-ggplot(dplyr::slice(gsets.h,1:20),
-       aes(x=-log10(p.adj), 
-           y = fct_reorder(str_wrap(str_remove(str_replace_all(GeneSet,"_"," "),"HALLMARK "),20),-log10(p.adj)),
-           fill = as.character(direction))) +
-  geom_bar(stat = "identity", color = "black", lwd = 1) +
-  geom_vline(xintercept = 1, linetype = "longdash", color = "red2", lwd = 1.25) +
-  labs(title = "WT-N comparison \nmost significant affected Hallmark pathways", y = '', 
-       fill = "Regulation direction") +
-  scale_fill_manual(values = c("-1" = "deepskyblue3","1" = "coral"),
-                    labels = c("-1" = "Down-regulated","1" = "Up-regulated")) +
-  theme_minimal(base_size = 24) + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank())
+                    contrasts = contrast_obj, gs.annots = gs.annots.h, symbolsMap = geneids_smbl,
+                    baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.05, combineMethod = "wilkinson",
+                    num.threads = 4, report = TRUE, 
+                    report.dir = here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/all comparisons MSIGDB Hallmark"),
+                    verbose = T, display.top = 35)
+gsets.h_wt_n <- read_tsv(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/all comparisons MSIGDB Hallmark/ranked-gene-sets-base/ranked-gmtcustom-gene-sets-WT9-N9.txt"))
+gsets.h_wt_ui <- read_tsv(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/all comparisons MSIGDB Hallmark/ranked-gene-sets-base/ranked-gmtcustom-gene-sets-WT9-UI9.txt"))
+gsets.h_n_ui <- read_tsv(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/all comparisons MSIGDB Hallmark/ranked-gene-sets-base/ranked-gmtcustom-gene-sets-N9-UI9.txt"))
+#pdf(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/egsea hallmark top 11 pathways.pdf"), width = 8, height = 6)
+walk2(list(gsets.h_wt_n, gsets.h_wt_ui, gsets.h_n_ui), c("WT-N","WT-UI", "N-UI"),
+      ~ print(ggplot(dplyr::slice(.x,1:11),
+                     aes(x=-log10(p.adj), 
+                         y = fct_reorder(str_wrap(str_remove(str_replace_all(GeneSet,"_"," "),"HALLMARK "),20),-Rank), 
+                                         fill = as.character(direction))) +
+                geom_bar(stat = "identity", color = "black", lwd = 1) +
+                geom_vline(xintercept = -log10(0.05), linetype = "longdash", color = "grey10", lwd = 1.25) +
+                labs(title = str_c(.y, " comparison \nmost significant affected pathways"), y = element_blank(), 
+                     fill = "Regulation direction") +
+                scale_fill_manual(values = c("-1" = carto_pal(2, diverg_pal_choice) [1],
+                                             "1" = carto_pal(2, diverg_pal_choice) [2]),
+                                  labels = c("-1" = "Down-regulated","1" = "Up-regulated")) + 
+                theme(title = element_text(size = 8),
+                      legend.title = element_text(size = 12),
+                      axis.title = element_text(size = 12),
+                      axis.text = element_text(size = 12))))
 #dev.off()
 ```
 
