@@ -565,21 +565,11 @@ walk2(list(gsets.h_wt_n, gsets.h_wt_ui, gsets.h_n_ui), c("WT-N","WT-UI", "N-UI")
 Write all the necessary objects as text tables to combine with miRNA results
 ```{r write-tables, eval=FALSE}
 #Print rld transformed RUV corrected counts and untransformed RUV corrected counts
-write.table(heat_mat, here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/tables/rld_count_matrix_RUV_corrected.txt"),
+write.table(assay(rld2.nobatch), here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/tables/rld_count_matrix_RUV_corrected.txt"),
             sep = "\t", row.names = T)
 ruv_mat <- limma::removeBatchEffect(counts(dds),
                                 covariates = matrix(data = c(rld$W_1,rld$W_2), ncol = 2),
                                 design = model.matrix(~ group, colData(rld)))
-#Create a mapping for ID to symbol
-geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(rownames(ruv_mat), "\\.[1-9]([0-9])?", ""), 
-                  keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first") %>% 
-  as.data.frame() %>% 
-  bind_cols(rownames(resWTNlfc)) %>% 
-  dplyr::select("symbol" = 1, "rowname" = `...2`)
-#Get nice names or keep ensembl IDs
-naOrDup <- is.na(geneids$symbol) | duplicated(geneids$symbol)
-geneids$gene_name <- ifelse(naOrDup, rownames(geneids), geneids$symbol)
-rownames(ruv_mat) <- geneids$gene_name
 write.table(ruv_mat, here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/tables/raw_count_matrix_RUV_corrected.txt"),
             sep = "\t", row.names = T)
 
