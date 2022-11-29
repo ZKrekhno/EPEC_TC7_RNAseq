@@ -24,6 +24,16 @@ library(rcartocolor)
 theme_set(theme_prism(base_size = 14))
 ```
 
+Define all helper functions and color choices
+```{r include=TRUE}
+#Set color choices from CARTOcolors
+discrete_pal_choice <- "Bold"
+cont_pal_choice <- "BluYl"
+diverg_pal_choice <- "Geyser"
+#Helper functions
+calc_relative <- function(x) x/sum(x) * 100
+```
+
 Prepare the data for analysis
 ```{r echo=TRUE, results = 'markup', include=TRUE}
 #analyzing miRNA-seq library prep for TC7 infection for 9 hours
@@ -131,7 +141,7 @@ walk(list(resWTvsUI,resWTvsN,resNvsUI),summary)
 #write.csv(res, here::here("long_infection_human_reads/miRNA_library/results/final clean figures/tables/normalized results.csv"), row.names = F)
 ```
 Next step is to determine overwhelming presence of miRNA (some can make up 50% of the data)
-```{r abund-mirna}
+```{r abund-mirna, fig.width=8, fig.height=6}
 calc_relative <- function(x) x/sum(x)*100
 rel_abund <- counts(dds) %>% 
   as.data.frame() %>% 
@@ -149,7 +159,7 @@ rel_abund_no_high <- counts(dds) %>%
   arrange(desc(UI92),desc(UI93)) %>% 
   mutate(top_names = c(rowname [1:5],rep("other",nrow(.)-5))) %>% 
   pivot_longer(-c("rowname","top_names"), names_to = "mapping", values_to = "numbers")
-#pdf(here::here("final clean figures/miRNA mapping stats by miRNA identity1.pdf"),width = 12,height = 10)
+#pdf(here::here("long_infection_human_reads/miRNA_library/results/final clean figures/miRNA mapping stats by miRNA identity1.pdf"),width = 8,height = 6)
 rel_list <- list(rel_abund,rel_abund_no_high)
 rel_point <- rel_abund %>% 
   group_by(top_names, mapping) %>% 
@@ -161,20 +171,24 @@ rel_point <- rel_abund %>%
   ))
 for (i in 1:2) {
   p <- ggplot(rel_list [[i]], aes(x=mapping, y=numbers, fill = fct_reorder(top_names,numbers, .desc = T))) +
-    geom_bar(stat = "identity") + scale_fill_brewer(name = "Aligned to miRNA",palette = "Accent") +
+    geom_bar(stat = "identity") + scale_fill_carto_d(name = "Aligned to miRNA",palette = "Bold") +
     labs(x = "", y = "Proportion of counts") +
     theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6))
   print(p)
 }
 
 ggplot(rel_point, aes(x = mapping, y = fct_reorder(top_names,numbers, .desc = T), size = numbers, fill = condition)) + 
-      geom_point(alpha = 0.75, shape = 21) + 
-       scale_size_continuous(range = c(1,20), breaks = c(5,10,20,35)) + 
-       labs( x= "", y = "", size = "Relative Abundance (%)", fill = "Condition")  + 
-       scale_fill_manual(name = "Infection status",
-                    labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
-                                "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
-                     values = c("UI" = "coral","WT" = "darkblue", "N" = "forestgreen"))
+  geom_point(alpha = 0.75, shape = 21) + 
+  scale_size_continuous(range = c(3,10), breaks = c(2,5,8,10)) + 
+  labs( x= "", y = "", size = "Relative Abundance (%)", fill = "Condition")  + 
+  scale_fill_manual(name = "Infection status",
+                    labels = c("N" = bquote(Delta*"EscN EPEC"),
+                               "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
+                    values = c("UI" = carto_pal(12,discrete_pal_choice) [10],
+                               "WT" = carto_pal(12,discrete_pal_choice) [2], 
+                               "N" = carto_pal(12,discrete_pal_choice) [1])) +
+  theme_prism(axis_text_angle = 45, base_size = 13) +
+  theme(legend.title = element_text())
 #dev.off()
 ```
 
