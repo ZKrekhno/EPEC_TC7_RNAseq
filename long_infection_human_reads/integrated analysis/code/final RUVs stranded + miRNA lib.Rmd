@@ -65,7 +65,7 @@ ggvenn(de_mirna, show_elements = T)
 #dev.off()
 ```
 From this it is evident, that DE miRNA are quite different across conditions WtvsUI and EscNvsUI, so let's investigate why they don't show up as WTvsEscN
-```{r volcano-de}
+```{r volcano-de, fig.width=8, fig.height=6}
 de_mirna_lfc <- bind_rows(mi_filt_up,wt_de_mirna,n_de_mirna) %>% 
   distinct() %>% 
   dplyr::select(comb_name, matches("log")) %>% 
@@ -78,14 +78,16 @@ de_mirna <- bind_cols(de_mirna_lfc,dplyr::select(de_mirna_p,-comb_name)) %>%
   mutate(comb_name = str_remove_all(comb_name,"hsa-mi[rR]-"),
          LFC_comparison = str_remove(LFC_comparison, "log2FoldChange\\."))
 
-ggplot(de_mirna) + 
-  geom_point(aes(x=LFC,y=-log10(padj), color = LFC_comparison)) + 
+ggplot(de_mirna) +  
   geom_hline(aes(yintercept=1), linetype = "longdash", lwd = 1.2, color = "darkgrey") +
-  geom_vline(aes(xintercept=0.6), linetype = "longdash", lwd = 1.2, color = "darkgrey")+
-  geom_vline(aes(xintercept=-0.6), linetype = "longdash", lwd = 1.2, color = "darkgrey")+
-  facet_wrap(~fct_reorder(comb_name,-log10(padj)), scales = "free_y") + 
-  theme_bw(base_size = 18)
-ggsave(here::here("final RUV figures/Volcano plots of all DE miRNA.png"), width = 12, height = 10)
+  geom_vline(aes(xintercept=0.5), linetype = "longdash", lwd = 1.2, color = "darkgrey")+
+  geom_vline(aes(xintercept=-0.5), linetype = "longdash", lwd = 1.2, color = "darkgrey")+
+  geom_point(aes(x=LFC,y=-log10(padj), color = LFC_comparison), size = 2.5) + 
+  scale_color_carto_d(palette = "Bold", direction = -1) +
+  facet_wrap(~fct_reorder(comb_name,-log10(padj)), scales = "free_y") +
+  theme_prism(base_size = 10, axis_text_angle = 45) +
+  theme(legend.title = element_text())
+#ggsave(here::here("long_infection_human_reads/integrated analysis/results/Volcano plots of all DE miRNA.png"), width = 8, height = 6, dpi = 1080)
 ```
 So I think, it is reasonable to select miRNA that are not shared between WTvsUI and EscNvsUI comparisons even though they don't pass FDR to be officially. Only choose the miRNA that have a reasonable log2fold change between WT and EscN - lfc of 0.4 (change of 1.3)
 ```{r choose-top}
