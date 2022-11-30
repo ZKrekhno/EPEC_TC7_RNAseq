@@ -203,13 +203,19 @@ ggplot(data = normal_PCA, aes(shape = genotype)) +
 ```
 Identify differentially expressed genes
 ```{r deseq-res}
+res45 <- results(dds, contrast = c("group","WT45", "WT0"))
 res90 <- results(dds, contrast = c("group","WT90", "WT0"))
 res180 <- results(dds, contrast = c("group","WT180", "WT0"))
-time_res <- merge(as.data.frame(res90), as.data.frame(res180), suffixes = c(".90",".180"), by = 0)
-#write.table(time_res, here::here("final clean figures/EDAseq_normalized results comparing by time WT infection.txt"),
- #           sep = "\t", row.names = F)
+time_res <- list(res45,res90,res180) %>% 
+  map(as.data.frame) %>% 
+  map2(c(".45",".90",".180"), ~rename_with(.x, .fn = function(colname) str_c(colname,.y))) %>% 
+  map(rownames_to_column, var = "geneid") %>% 
+  reduce(left_join)
+#write.csv(time_res, here::here(str_c(res_path,"tables/EDAseq_normalized results comparing by time WT infection.csv")), row.names = F)
+```
 
 
+```{r deseq-res-wt-n}
 res90vsn <- results(dds, contrast = c("group","WT90", "N90"))
 res180vsn <- results(dds, contrast = c("group","WT180", "N180")) #none showed significant differences
 summary(res90vsn)
@@ -217,8 +223,6 @@ summary(res180vsn)
 ```
 Analyze loadings of the principal components in the data
 ```{r pcatools}
-library(PCAtools)
-library('org.Hs.eg.db')
 #Create a mapping for ID to symbol
 geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(rownames(counts(dds)), "\\.[1-9]([0-9])?", ""), 
                   keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first")
