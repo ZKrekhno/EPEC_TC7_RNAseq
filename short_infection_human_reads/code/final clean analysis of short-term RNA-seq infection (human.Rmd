@@ -222,7 +222,7 @@ summary(res90vsn)
 summary(res180vsn)
 ```
 Analyze loadings of the principal components in the data
-```{r pcatools}
+```{r pcatools, fig.width=9, fig.height=6}
 #Create a mapping for ID to symbol
 geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(rownames(counts(dds)), "\\.[1-9]([0-9])?", ""), 
                   keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first")
@@ -235,42 +235,11 @@ newnames <- ifelse(is.na(geneids) | duplicated(geneids),
     names(geneids), geneids)
 rownames(cnts) <- newnames
 p <- pca(cnts,colData(dds), removeVar = 0.1)
-#pdf(here::here("final clean figures/PCA tools analysis of PCA.pdf"), width = 12, height = 10)
-biplot(p, colby = "timepoint", shape = "genotype", showLoadings = T,gridlines.major = FALSE)
-biplot(p, colby = "timepoint", shape = "genotype",gridlines.major = FALSE)
+#pdf(here::here(str_c(res_path,"PCA tools loadings of PCA.pdf")), width = 9, height = 6)
 plotloadings(p,  rangeRetain = 0.01,
-    labSize = 4.0,
-    caption = "Top 1% variables")
-eigencorplot(p,
-    metavars = c('group','timepoint','genotype'),
-    col = c('darkblue', 'blue2', 'darkgrey', 'red2', 'darkred'))
-eigencorplot(p,
-             components = getComponents(p,1:9),
-    metavars = c('group','timepoint','genotype'),
-    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
-    cexCorval = 2,
-    cexLabX = 1.8,
-    cexLabY = 1.8,
-    cexLabColKey = 1.8,
-    fontCorval = 2,
-    posLab = 'bottomleft',
-    rotLabX = 45,
-    scale = TRUE,
-    main = bquote(Principal ~ component ~ Pearson ~ r^2 ~ correlates),
-    plotRsquared = TRUE,
-    corFUN = 'pearson',
-    corUSE = 'pairwise.complete.obs',
-    corMultipleTestCorrection = 'BH',
-    signifSymbols = c('****', '***', '**', '*', ''),
-    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
+    labSize = 2.5, col = carto_pal(3,diverg_pal_choice) ,
+    caption = "Top 1% variables") + theme(legend.title = element_text())
 #dev.off()
-#In case want to show PC coordinates with respect samples with boxplots
-pc_coord <- p$rotated %>% 
-  as_tibble(rownames = "sample") %>% 
-  left_join(as_tibble(pData,rownames = "sample")) %>% 
-  pivot_longer(contains("PC"),names_to = "PC",values_to = "coord") 
-ggplot(pc_coord) + geom_boxplot(aes(x = as.character(timepoint), y = coord)) +
-  facet_wrap(~PC ,scales = "free_y")
 ```
 Make volcano plots of differentially expressed genes
 ```{r volcano}
