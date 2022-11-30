@@ -437,7 +437,7 @@ geneids_smbl <- mapIds(org.Hs.eg.db, keys = rownames(cnt_obj_filt), keytype = "E
   unlist() 
 geneids_smbl <- data.frame(entrezid = names(geneids_smbl), symbol = unname(geneids_smbl))
 ```
-```{r eggsea, eval=FALSE}
+```{r eggsea, eval=FALSE, fig.width=8, fig.height=6}
 #Move onto EGSEA analysis
 #Build gene set collection
 gs.annots <-  buildIdx(entrezIDs = rownames(cnt_obj_filt), species = "human",
@@ -451,42 +451,68 @@ gs.annots[["kegg"]]@anno = gs.annots[["kegg"]]@anno[-sel, ]
 #Perform the EGSEA analysis with voom built-in
 gsa <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_matrix,
   contrasts = contrast_obj, gs.annots = gs.annots, symbolsMap = geneids_smbl,
-  baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.1, combineMethod = "wilkinson",
-  num.threads = 4, report = TRUE, report.dir = here::here("final clean figures/all final comparisons"),
+  baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.05, combineMethod = "wilkinson",
+  num.threads = 4, report = TRUE, 
+  report.dir = here::here(str_c(res_path,"all final comparisons")),
   verbose = T, display.top = 35)
 #Now repeat just for WT analysis
 contrast_obj_Wt <- makeContrasts(contrasts = names_for_contr[!str_detect(names_for_contr,"N")],
                                  levels = colnames(design_matrix))
 gsa.wt <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_matrix,
   contrasts = contrast_obj_Wt, gs.annots = gs.annots, symbolsMap = geneids_smbl,
-  baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.1, combineMethod = "wilkinson",
-  num.threads = 4, report = TRUE, report.dir = here::here("final clean figures/wt final comparisons"),
+  baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.05, combineMethod = "wilkinson",
+  num.threads = 4, report = TRUE, 
+  report.dir = here::here(str_c(res_path,"wt final comparisons")),
   verbose = T, display.top = 35)
-gsets <- read_tsv(here::here("final clean figures/wt final comparisons/ranked-gene-sets-base/ranked-kegg-gene-sets-compare.txt"))
-#png(here::here("final clean figures/egsea WTvsWT0 top pathways.png"), width = 7, height = 9, units = "in", res = 720)
-ggplot(dplyr::slice(gsets,1:26),
-       aes(x=-log10(p.adj), y = fct_reorder(str_wrap(GeneSet,30),-Rank), fill = as.character(direction))) +
-  geom_bar(stat = "identity", color = "black", lwd = 1) +
-  geom_vline(xintercept = 1, linetype = "longdash", color = "red2", lwd = 1) +
-  labs(y = '', fill = "Regulation direction") +
-  scale_fill_manual(values = c("-1" = "deepskyblue3","1" = "coral", "0" = "mediumpurple3"),
-                    labels = c("-1" = "Down-regulated","1" = "Up-regulated", "0" = "Neutral")) +
-  theme_minimal(base_size = 14) + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),
-                                        axis.text.y = element_text(hjust = 1))
+gsets <- read_tsv(here::here(str_c(res_path, "wt final comparisons/ranked-gene-sets-base/ranked-kegg-gene-sets-WT180-WT0.txt")))
+#png(here::here(str_c(res_path,"egsea WT180vsWT0 top pathways.png")), width = 8, height = 6, units = "in", res = 1080)
+ggplot(dplyr::slice(gsets,1:15),
+                     aes(x=-log10(p.adj), y = fct_reorder(str_wrap(GeneSet,30),-Rank), fill = as.character(direction))) +
+                geom_bar(stat = "identity", color = "black", lwd = 1) +
+                geom_vline(xintercept = -log10(0.05), linetype = "longdash", color = "grey10", lwd = 1.25) +
+                labs(title = str_c("WT infection at 180min\nmost significant affected pathways"), y = element_blank(), 
+                     fill = "Regulation direction") +
+                scale_fill_manual(values = c("-1" = carto_pal(2, diverg_pal_choice) [1],
+                                             "1" = carto_pal(2, diverg_pal_choice) [2]),
+                                  labels = c("-1" = "Down-regulated","1" = "Up-regulated")) + 
+                theme(title = element_text(size = 8),
+                      legend.title = element_text(size = 12),
+                      axis.title = element_text(size = 12),
+                      axis.text = element_text(size = 12))
 #dev.off()
 ```
 
-```{r egsea-msigdb-h, eval=FALSE}
+```{r egsea-msigdb-h, eval=FALSE, fig.width=8, fig.height=6}
 #Move onto EGSEA analysis with hallmark gene sets
 
 #Build gene set collection
-gs.annots.h <-  buildGMTIdx(geneIDs = rownames(cnt_obj_filt), species = "Human", gmt.file = here::here("h.all.v7.5.1.entrez.gmt"))
+gs.annots.h <-  buildGMTIdx(geneIDs = rownames(cnt_obj_filt), species = "Human", 
+                            gmt.file = here::here(str_c(data_path,"h.all.v7.5.1.entrez.gmt")))
 
 gsa.h <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_matrix,
-  contrasts = contrast_obj_Wt, gs.annots = gs.annots.h, symbolsMap = geneids_smbl,
- baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.1, combineMethod = "wilkinson",
-  num.threads = 4, report = TRUE, report.dir = here::here("final clean figures/wt comparisons MSIGDB Hallmark"),
-  verbose = T, display.top = 35)
+                    contrasts = contrast_obj_Wt, gs.annots = gs.annots.h, symbolsMap = geneids_smbl,
+                    baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.05, combineMethod = "wilkinson",
+                    num.threads = 4, report = TRUE, 
+                    report.dir = here::here(str_c(res_path, "wt comparisons MSIGDB Hallmark")),
+                    verbose = T, display.top = 35)
+gsets_hall <- read_tsv(here::here(str_c(res_path, "wt comparisons MSIGDB Hallmark/ranked-gene-sets-base/ranked-gmtcustom-gene-sets-WT180-WT0.txt")))
+#png(here::here(str_c(res_path,"egsea WT180vsWT0 top Hallmark pathways.png")), width = 8, height = 6, units = "in", res = 1080)
+ggplot(dplyr::slice(gsets_hall,1:15),
+       aes(x=-log10(p.adj), 
+           y = fct_reorder(str_wrap(str_remove(str_replace_all(GeneSet,"_"," "),"HALLMARK "),20),-Rank), 
+           fill = as.character(direction))) +
+  geom_bar(stat = "identity", color = "black", lwd = 1) +
+  geom_vline(xintercept = -log10(0.05), linetype = "longdash", color = "grey10", lwd = 1.25) +
+  labs(title = str_c("WT 180 min Hallmark \nmost significant affected pathways"), y = element_blank(), 
+       fill = "Regulation direction") +
+  scale_fill_manual(values = c("-1" = carto_pal(2, diverg_pal_choice) [1],
+                               "1" = carto_pal(2, diverg_pal_choice) [2]),
+                    labels = c("-1" = "Down-regulated","1" = "Up-regulated")) + 
+  theme(title = element_text(size = 8),
+        legend.title = element_text(size = 12),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))
+#dev.off()
 ```
 
 Use clusterprofiler to compare themes between conditions
