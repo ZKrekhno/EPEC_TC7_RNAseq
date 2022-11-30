@@ -75,21 +75,20 @@ mapped <-  counts_simple %>%
 
 #Raw counts stats
 raw_count_plot <- ggplot(mapped, aes(x=mapping, y=numbers, fill = Gene_ID)) +
-  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Accent") +
+  geom_bar(stat = "identity") + scale_fill_carto_d(palette = discrete_pal_choice) +
   labs(x = "", y = "Raw counts") +theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) + 
   guides(fill = guide_legend(title = "Mapping Status"))
-calc_relative <- function(x) x/sum(x) * 100
 #Relative count stats
 rel_map <- mapped %>% 
   pivot_wider(Gene_ID, names_from = mapping, values_from = numbers) %>%  
   mutate(across(-Gene_ID, calc_relative)) %>% 
   pivot_longer(-Gene_ID,values_to = "numbers", names_to = "mapping")
 rel_count_plot <-ggplot(rel_map, aes(x=mapping, y=numbers, fill = Gene_ID)) +
-  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Accent") +
+  geom_bar(stat = "identity") + scale_fill_carto_d(palette = discrete_pal_choice) +
   labs(x = "", y = "Proportion of counts") +
   theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) + 
   guides(fill = guide_legend(title = "Mapping Status"))
-#pdf(file = here::here("final clean figures/mapping stats.pdf"), width = 8, height = 6.6)
+#pdf(file = here::here(str_c(res_path,"mapping stats.pdf")), width = 8, height = 6)
 raw_count_plot
 rel_count_plot
 #dev.off()
@@ -99,7 +98,6 @@ Calculate statistics of types of transcripts mapped
 
 ```{r}
 library(org.Hs.eg.db)
-columns(org.Hs.eg.db)
 geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(counts_simple$Gene_ID [-1:-4], "\\.[1-9]([0-9])?", ""), 
                   keytype = "ENSEMBL", column = "GENETYPE", multiVals = "first") %>% 
   as.data.frame() %>% 
@@ -116,13 +114,13 @@ c_type <- counts_simple %>%
   pivot_longer(-Type, values_to = "numbers", names_to = "mapping") %>% 
   mutate(Type = str_replace_na(Type, replacement = "other"))
 rel_type_plot <- ggplot(c_type, aes(x=mapping, y=numbers, fill = fct_reorder(Type,numbers, .desc = T))) +
-  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Accent") +
+  geom_bar(stat = "identity") + scale_fill_carto_d(palette = discrete_pal_choice) +
   labs(x = "", y = "Proportion of genes") +
   theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) + 
   guides(fill = guide_legend(title = "Gene type"))
-#pdf(file = here::here("final clean figures/mapping stats by gene type.pdf"), width = 8, height = 6.6)
+pdf(file = here::here(here::here(str_c(res_path,"mapping stats by gene type.pdf")), width = 8, height = 6)
 rel_type_plot
-#dev.off()
+dev.off()
 
 ```
 
