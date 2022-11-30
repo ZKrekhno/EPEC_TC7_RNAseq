@@ -39,24 +39,25 @@ diverg_pal_choice <- "Geyser"
 calc_relative <- function(x) x/sum(x) * 100
 #Set up paths for data, and results
 data_path <- "short_infection_human_reads/data/"
-res_path <- "short_infection_human_reads/results/"
+res_path <- "short_infection_human_reads/results/final clean figures/"
 ```
 
 #Read in the count data and rename the columns to fit the sample names
 
 ```{r readorigstar}
-counts <- read.table("STAR_reads_all.txT",header = F, sep = "\t", stringsAsFactors = F)
+counts <- read.table(here::here(str_c(data_path,"STAR_reads_updated.txt")),header = F, sep = "\t", stringsAsFactors = F)
 #Next manipulate the table to remove redundant columns and only keep relevant columns (1 columns with gene names, and the rest with counts for reverse stranded library
-counts_simple <- counts [,seq(from=4,to=88,by=4)]
-colnames(counts_simple) <- c("4UIN", "4UIWT", "490WT", "490N", "4180N", "4180WT", "5UIN", "5UIWT", "545WT", "545N", "590WT", "590N", "5180N", "5180WT", "6UIN", "6UIWT", "645WT", "645N", "690WT", "690N", "6180N", "6180WT")
+counts_simple <- counts [,seq(from=4,to=96,by=4)]
+colnames(counts_simple) <- c("4UIN", "4UIWT", "490WT", "490N", "4180N", "4180WT", "5UIN", "5UIWT", "545WT", "545N", "590WT", "590N", "5180N", "5180WT", "6UIN", "6UIWT", "645WT", "645N", "690WT", "690N", "6180N", "6180WT", "445N", "445WT")
+#Prior analysis revealed that 6UIN is an outlier by PCA plot
 counts_simple <- counts_simple %>% 
-  dplyr::select(-contains("45"), -`6UIN`)
+  dplyr::select(-`6UIN`)
 counts_simple$Gene_ID <- counts$V1
 
 filter <- apply(dplyr::select(counts_simple,-Gene_ID),1,function(x) mean(x)>5)
 counts_simple <- counts_simple [filter,]
 
-#write.table(counts_simple,file="only_reverse_strand_counts_cleaned.txt",sep = "\t", row.names = F)
+#write.table(counts_simple,file=here::here(str_c(res_path,"tables/only_reverse_strand_counts_cleaned.txt")),sep = "\t", row.names = F)
 ```
 
 ```{r vis-align-stats}
