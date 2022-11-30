@@ -243,8 +243,6 @@ plotloadings(p,  rangeRetain = 0.01,
 ```
 Make volcano plots of differentially expressed genes
 ```{r volcano}
-library(EnhancedVolcano)
-library('org.Hs.eg.db')
 #shrink results
 res90lfc <- lfcShrink(dds, coef="group_WT90_vs_WT0", type="apeglm", res = res90)
 res180lfc <- lfcShrink(dds, coef="group_WT180_vs_WT0", type="apeglm", res = res180)
@@ -258,52 +256,66 @@ geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(rownames(res180lfc), "\\.
 #Get nice names or keep ensembl IDs
 naOrDup <- is.na(geneids$symbol) | duplicated(geneids$symbol)
 geneids$gene_name <- ifelse(naOrDup, rownames(geneids), geneids$symbol)
-#identify top20 genes for each comparison
-id_top <- function(x) {
-  x %>% 
-  as.data.frame() %>% 
-  arrange(padj) %>% 
-  dplyr::slice(1:20) %>% 
-  rownames_to_column(var = "rowname") %>% 
-  left_join(geneids) }
-top_list <- list("WT90" = res90lfc,"WT180" = res180lfc) %>% 
-  map(id_top)
 results_list <- list(res90lfc,res180lfc)
 #Replace the rownames with gene names
-for (i in 1:2) {rownames(results_list [[i]]) <- geneids$gene_name}
-#pdf(here::here("final clean figures/Volcano plots.pdf"), width = 8, height = 6.6)
+for (i in seq_along(results_list)) {rownames(results_list [[i]]) <- geneids$gene_name}
+#Prepare the results list for plotting
+res_df_list <- results_list %>% 
+  map(as.data.frame) %>% 
+  map(rownames_to_column, var = "gene") %>% 
+  map(mutate, signi = if_else(padj < 0.05 & abs(log2FoldChange) >= 0.5, "yes","no"))
+
+#Create the function for making a nice volcano plot
+volcano_ggplot <- function(res_df, title = "", to_label = F, n_lab = 10) {
+  p_empty <- ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), fill = signi, color = signi)) +
+    geom_hline(yintercept = -log10(0.05), lty = 2, lwd = 0.8, color = "grey30") +
+    geom_vline(xintercept = -0.5, lty = 2, lwd = 0.8, color = "grey30") +
+    geom_vline(xintercept = 0.5, lty = 2, lwd = 0.8, color = "grey30") +
+    geom_point(size = 4, shape = 21, alpha = 0.7) +
+    scale_color_manual(values = c("darkgrey", carto_pal(7,diverg_pal_choice) [7])) +
+    scale_fill_manual(values = c("darkgrey", carto_pal(7,diverg_pal_choice) [7])) +
+    guides(color = 'none', fill = 'none') +
+    labs(x = bquote(~Log[2] ~ "fold change"),
+         y = bquote(~-Log[10] ~ italic(P)),
+         title = title) +
+    theme_prism(base_size = 24) +
+    theme(title = element_text(size = 10),
+          axis.title = element_text(size = 24))
+  if(to_label) {
+    res_df_top <- res_df %>% 
+      filter(signi == "yes") %>% 
+      arrange(desc(abs(log2FoldChange))) %>% 
+      slice_head(n=n_lab)
+    p_labelled <- p_empty + 
+      geom_label_repel(data = res_df_top, aes(x = log2FoldChange, y = -log10(padj), label = gene),
+                       size = 4, max.overlaps = Inf, color = "black", fill = "white")
+    return(p_labelled)
+  } else {
+    return(p_empty)
+  }
+}
+#Print the volcano plots - each should get its own png file
+volcano_list <- map2(res_df_list, 
+                     c("WT infection at 90min", "WT infection at 180min"),
+                     volcano_ggplot)
+#Repeat the same with adding top 10 DE genes
+volcano_list_labelled <- map2(res_df_list, 
+                     c("WT infection at 90min", "WT infection at 180min"),
+                     volcano_ggplot, to_label = T, n_lab = 10)
+#pdf(here::here(str_c(res_path,"Volcano plots.pdf")), width = 8, height = 6)
+walk(volcano_list,print)
+walk(volcano_list_labelled,print)
+#dev.off()
+
+
+#pdf(here::here(str_c(res_path,"MA plots.pdf")), width = 8, height = 6)
 plotMA(res90, main = "WT infection 90 min vs 0min \nResults without shrinking")
 plotMA(res90lfc, main = "WT infection 90 min vs 0min \nResults after apeglm shrinking")
 plotMA(res180, main = "WT infection 180 min vs 0min \nResults without shrinking")
 plotMA(res180lfc, main = "WT infection 180 min vs 0min \nResults after apeglm shrinking")
-
-volcano_with_labels <- function(res_obj,select_lab = "",title) {
-  EnhancedVolcano(res_obj,
-    lab = rownames(res_obj),
-    selectLab = select_lab,
-    x = 'log2FoldChange',
-    y = 'pvalue',
-    title = title,
-    pointSize = 3,
-    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
-    legendPosition = 'bottom',
-    subtitle = NULL,
-    pCutoff = 0.05,
-    FCcutoff = 0.6,
-    labSize = 4.0,
-                boxedLabels = T, labCol = 'black',
-               labFace = 'bold',
-                drawConnectors = T, widthConnectors = 1.0,
-               colConnectors = 'black')
-}
-titles <- list("Differentially expressed genes at 1.5hr of infection",
-               "Differentially expressed genes at 3hr of infection")
-for (i in 1:2) {
-  volcano_with_labels(results_list[[i]],title = titles [[i]]) %>% print()
-  volcano_with_labels(results_list[[i]],select_lab = top_list [[i]]$gene_name,title = titles [[i]]) %>% print()
-}
 #dev.off()
 ```
+
 
 Create a heatmap of top differentially expressed genes
 ```{r heatmap, eval=FALSE}
