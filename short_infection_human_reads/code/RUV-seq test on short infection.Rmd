@@ -38,7 +38,6 @@ calc_relative <- function(x) x/sum(x) * 100
 #Set up paths for data, and results
 data_path <- "short_infection_human_reads/data/"
 res_path <- "short_infection_human_reads/results/"
-
 ```
 
 ```{r readorigstar}

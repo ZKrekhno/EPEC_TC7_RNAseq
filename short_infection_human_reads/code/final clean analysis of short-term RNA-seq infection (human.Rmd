@@ -2,18 +2,44 @@
 title: "Final clean analysis of short-term infection RNA-seq"
 output: 
   html_notebook: 
-    fig_width: 12
-    fig_height: 10
+    fig_width: 6
+    fig_height: 5
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
-```{r include=TRUE}
+```{r results='hide', message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(include = TRUE)
-library(tidyverse)
+knitr::opts_chunk$set(fig.width = 6)
+knitr::opts_chunk$set(fig.height = 5)
 library(greekLetters)
-theme_set(theme_bw(base_size = 18))
+library(RUVSeq)
+library(EDASeq)
+library(DESeq2)
+library(PCAtools)
+library('org.Hs.eg.db')
+library(EGSEA)
+library(limma)
+library(pheatmap)
+library(clusterProfiler)
+library(tidyverse)
+library(ggprism)
+library(rcartocolor)
+```
+
+Define all helper functions and color choices
+```{r include=TRUE}
+theme_set(theme_prism(base_size = 14))
+#Set color choices from CARTOcolors
+discrete_pal_choice <- "Bold"
+cont_pal_choice <- "BluYl"
+diverg_pal_choice <- "Geyser"
+#Helper functions
+calc_relative <- function(x) x/sum(x) * 100
+#Set up paths for data, and results
+data_path <- "short_infection_human_reads/data/"
+res_path <- "short_infection_human_reads/results/"
 ```
 
 #Read in the count data and rename the columns to fit the sample names
