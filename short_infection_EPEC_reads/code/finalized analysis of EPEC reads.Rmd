@@ -202,7 +202,6 @@ pData <- data.frame(genotype=vector(mode = "logical", length = ncol(c_mat)),
 pData <- pData %>% 
   mutate(genotype = case_when(
     str_detect(samples, "WT") ~ "WT",
-    str_detect(samples, "UIN") ~ "WT",
     str_detect(samples, "N") ~ "N"
   ), timepoint = if_else(str_detect(samples,"UI"), 
                         0, 
@@ -225,6 +224,10 @@ dataOffset <- betweenLaneNormalization(data,
 Next step is to use normalized counts in the DESEq2 analysis of differential expression
 ```{r deseq}
 #Prepare the DESEq2 object and apply EDASeq normalization factors
+pData <- pData %>% 
+  rownames_to_column(var = "samples") %>% 
+  mutate(genotype = if_else(timepoint ==0, str_remove(samples, "^.{3,3}"), genotype)) %>% 
+  column_to_rownames(var = "samples")
 pData$group <- factor(paste0(pData$genotype,pData$timepoint))
 dds <- DESeqDataSetFromMatrix(countData = counts(data),
                               colData = pData,
@@ -260,21 +263,30 @@ ggplot(data = normal_PCA, aes(shape = genotype)) +
 ```
 Identify differentially expressed genes
 ```{r deseq-res}
+res45 <- results(dds, contrast = c("group","WT45", "WT0"))
 res90 <- results(dds, contrast = c("group","WT90", "WT0"))
 res180 <- results(dds, contrast = c("group","WT180", "WT0"))
-time_res <- merge(as.data.frame(res90), as.data.frame(res180), suffixes = c(".90",".180"), by = 0)
+time_res <- list(res45,res90,res180) %>% 
+  map(as.data.frame) %>% 
+  map2(c(".45",".90",".180"), ~rename_with(.x, .fn = function(colname) str_c(colname,.y))) %>% 
+  map(rownames_to_column, var = "geneid") %>% 
+  reduce(left_join)
 time_res_annot <- time_res %>% 
-  left_join(dplyr::select(annot,ID,true_name,true_biotype), by = c("Row.names" = "ID"))
-#write.table(time_res_annot, here::here("final EPEC figures/EDAseq_normalized results comparing by time WT infection.txt"),
- #          sep = "\t", row.names = F)
+  left_join(dplyr::select(annot,ID,true_name,true_biotype), by = c("geneid" = "ID"))
+write.table(time_res_annot, here::here(str_c(res_path, "tables/EDAseq_normalized results comparing by time WT infection.csv")),
+           sep = ",", row.names = F)
 
-
+res45vsn <- results(dds, contrast = c("group","WT45", "N45"))
 res90vsn <- results(dds, contrast = c("group","WT90", "N90"))
 res180vsn <- results(dds, contrast = c("group","WT180", "N180")) #Some significant differences shown
-res180vsn_annot <- as.data.frame(res180vsn) %>% 
-  rownames_to_column(var = "ID")  %>% 
-  left_join(dplyr::select(annot, ID, true_name, true_biotype))
-#A lot of type 3 genes, bundle forming pili proteins, and some metabolism
+time_resvsn_annot <- list(res45vsn,res90vsn,res180vsn) %>% 
+  map(as.data.frame) %>% 
+  map2(c(".45",".90",".180"), ~rename_with(.x, .fn = function(colname) str_c(colname,.y))) %>% 
+  map(rownames_to_column, var = "geneid") %>% 
+  reduce(left_join) %>% 
+  left_join(dplyr::select(annot, ID, true_name, true_biotype), by = c("geneid" = "ID"))
+#write.table(time_resvsn_annot, here::here(str_c(res_path, "tables/EDAseq_normalized results comparing  WT and EscN infection.csv")),
+ #          sep = ",", row.names = F)
 ```
 Analyze loadings of the principal components in the data
 ```{r pcatools}
