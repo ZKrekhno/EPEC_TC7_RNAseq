@@ -147,7 +147,8 @@ annot <- geneids %>%
            ), true_biotype = case_when(
              str_detect(Name, "biotype") ~ str_remove(Name, "biotype="),
              str_detect(Biotype, "biotype") ~ str_remove(Biotype, "biotype=")
-           ))
+           )) %>% 
+  mutate(true_name = if_else(duplicated(true_name), ID, true_name))
 c_type <- counts_simple %>% 
   dplyr::slice(-1:-4) %>%
   left_join(dplyr::select(annot, ID, true_biotype), by = c("Gene_ID" = "ID")) %>% 
@@ -285,12 +286,22 @@ time_resvsn_annot <- list(res45vsn,res90vsn,res180vsn) %>%
   map(rownames_to_column, var = "geneid") %>% 
   reduce(left_join) %>% 
   left_join(dplyr::select(annot, ID, true_name, true_biotype), by = c("geneid" = "ID"))
-#write.table(time_resvsn_annot, here::here(str_c(res_path, "tables/EDAseq_normalized results comparing  WT and EscN infection.csv")),
- #          sep = ",", row.names = F)
+write.table(time_resvsn_annot, here::here(str_c(res_path, "tables/EDAseq_normalized results comparing  WT and EscN infection.csv")),
+           sep = ",", row.names = F)
 ```
+
+Check overlap of DE genes between induced by time and by working T3SS
+```{r de-overlap}
+per_time_de <- list(res45,res90,res180, res45vsn, res90vsn, res180vsn) %>% 
+  set_names(str_c("vs", rep(c("Planktonic","dEscN"), each = 3), rep(c(45,90,180), times = 2), sep = "_")) %>% 
+  map(as.data.frame) %>% 
+  map(filter,abs(log2FoldChange) >= 0.5, padj < 0.05) %>% 
+  map(pull, )
+```
+
+
 Analyze loadings of the principal components in the data
-```{r pcatools}
-library(PCAtools)
+```{r pcatools, fig.width=8, fig.height=6.3}
 #Annotate the gene id to more meaningful gene names
 cnts <- assay(rld) 
 cnts_annot <- cnts %>% 
@@ -309,9 +320,6 @@ biplot(p, colby = "timepoint", shape = "genotype",gridlines.major = FALSE)
 plotloadings(p,  rangeRetain = 0.01,
     labSize = 4.0,
     caption = "Top 1% variables")
-eigencorplot(p,
-    metavars = c('group','timepoint','genotype'),
-    col = c('darkblue', 'blue2', 'darkgrey', 'red2', 'darkred'))
 eigencorplot(p,
     metavars = c('group','timepoint','genotype'),
     col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
