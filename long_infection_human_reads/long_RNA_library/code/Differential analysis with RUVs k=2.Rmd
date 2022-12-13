@@ -689,6 +689,7 @@ walk2(biol_pw_df_list,names(biol_pw_df_list),
 Finally, make a heatmap of DE genes from Apoptosis, TNFA signaling, or TGF-Beta, or IL6 JAK STAT3 signaling pathways.
 ```{r pheatmap-select}
 heat_mat <- assay(rld2.nobatch)
+rownames(heat_mat) <- geneids$gene_name
 #Select genes in one of the pathways of interest
 h_sym_select <- h_sym %>% 
   filter(str_detect(term, "APOPTOSIS") | 
@@ -782,7 +783,7 @@ pwalk(list(heat_mat_by_path, names(heat_mat_by_path), font_size_row = c(8,4,8, 8
                                                                 "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
                                                                 "Uninfected" = carto_pal(12,discrete_pal_choice) [10])),
                 fontsize = 8, treeheight_col = 0, cluster_rows = T, treeheight_row = 0,
-                fontsize_row = ..3,
+                fontsize_row = ..3, border_color = NA,
                 breaks = mybreaks, annotation_names_row = F, annotation_names_col = F,
                 color = color_scheme, show_rownames = T, show_colnames = F, main = ..2,
                 width = 8, height = 6,
