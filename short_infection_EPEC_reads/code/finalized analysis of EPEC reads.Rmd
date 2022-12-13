@@ -1,0 +1,406 @@
+---
+title: "finalized analysis of EPEC data"
+output: 
+  html_notebook:
+    fig_width: 6
+    fig_height: 5
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r results='hide', message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(include = TRUE)
+knitr::opts_chunk$set(fig.width = 6)
+knitr::opts_chunk$set(fig.height = 5)
+library(greekLetters)
+library(RUVSeq)
+library(EDASeq)
+library(DESeq2)
+library(PCAtools)
+library('org.Hs.eg.db')
+library(EGSEA)
+library(limma)
+library(pheatmap)
+library(eulerr)
+library(UpSetR)
+library(clusterProfiler)
+library(tidyverse)
+library(ggprism)
+library(rcartocolor)
+```
+
+#Read in the count data and rename the columns to fit the sample names
+
+```{r readorigstar}
+counts <- read.table("STAR_EPEC_reads_all.txT",header = F, sep = "\t", stringsAsFactors = F)
+#Next manipulate the table to remove redundant columns and only keep relevant columns (1 columns with gene names, and the rest with counts for reverse stranded library
+counts_simple <- counts [,seq(from=4,to=88,by=4)]
+colnames(counts_simple) <- c("4UIN", "4UIWT", "490WT", "490N", "4180N", "4180WT", "5UIN", "5UIWT", "545WT", "545N", "590WT", "590N", "5180N", "5180WT", "6UIN", "6UIWT", "645WT", "645N", "690WT", "690N", "6180N", "6180WT")
+counts_simple <- counts_simple %>% 
+  dplyr::select(-contains("45"), -`6UIN`)
+counts_simple$Gene_ID <- counts$V1
+
+filter <- apply(dplyr::select(counts_simple,-Gene_ID),1,function(x) mean(x)>5)
+counts_simple <- counts_simple [filter,] %>% 
+  mutate(Gene_ID = str_remove(Gene_ID, "(gene:)|(transcript:)"))
+  
+#write.table(counts_simple,
+ #           file=here::here("final EPEC figures/only_reverse_strand_counts_cleaned.txt"),sep = "\t", row.names = F)
+```
+
+Visualize EscN counts per sample:
+The EscN gene is: E2348C_3948
+```{r escn-counts, eval=FALSE}
+counts_simple %>% 
+  filter(Gene_ID == "E2348C_3948") %>% 
+  pivot_longer(-Gene_ID, names_to = "samples", values_to = "numbers") %>% 
+  ggplot() +
+  geom_point(aes(x=samples, y = numbers)) +
+  labs(y = "counts", title = "counts for EscN gene") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.6))
+ggsave(here::here("final EPEC figures/raw counts for escN.png"),width = 6, height = 5, dpi = 1080)
+```
+
+
+Visualize mapping stats
+```{r vis-align-stats}
+#Visualize alignment statistics
+counts_stats <- counts_simple %>% 
+  dplyr::slice(1:4) %>% 
+  pivot_longer(-Gene_ID, values_to = "numbers", names_to = "mapping")
+mapped <-  counts_simple %>%
+  select(-Gene_ID) %>%
+  summarise(across(everything(), sum)) %>% 
+  pivot_longer(everything(),values_to = "numbers", names_to = "mapping") %>% 
+  mutate(Gene_ID = "Mapped") %>% 
+  bind_rows(counts_stats) %>% 
+  mutate(Gene_ID = fct_relevel(str_to_title(str_replace(Gene_ID, "N_","")), "Mapped"))
+
+#Raw counts stats
+raw_count_plot <- ggplot(mapped, aes(x=mapping, y=numbers, fill = Gene_ID)) +
+  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Accent") +
+  labs(x = "", y = "Raw counts") +theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) + 
+  guides(fill = guide_legend(title = "Mapping Status"))
+calc_relative <- function(x) x/sum(x) * 100
+#Relative count stats
+rel_map <- mapped %>% 
+  pivot_wider(Gene_ID, names_from = mapping, values_from = numbers) %>%  
+  mutate(across(-Gene_ID, calc_relative)) %>% 
+  pivot_longer(-Gene_ID,values_to = "numbers", names_to = "mapping")
+rel_count_plot <-ggplot(rel_map, aes(x=mapping, y=numbers, fill = Gene_ID)) +
+  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Accent") +
+  labs(x = "", y = "Proportion of counts") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) + 
+  guides(fill = guide_legend(title = "Mapping Status"))
+#pdf(file = here::here("final EPEC figures/mapping stats.pdf"), width = 8, height = 6.3)
+raw_count_plot
+rel_count_plot
+#dev.off()
+```
+
+Calculate statistics of types of transcripts mapped
+
+```{r}
+#Prepare gene annotation from the gff3 file
+geneids <- read_delim("EPEC_annot.rel-41.gff3", 
+       delim = "\t", escape_double = FALSE, 
+       col_names = FALSE, trim_ws = TRUE, skip = 11) 
+annot <- geneids %>% 
+  filter(X3 == "gene" | X3 == "pseudogene" | X3 == "rRNA_gene" | 
+           X3 == "tRNA_gene" | X3 == "ncRNA_gene") %>% 
+  filter(str_detect(X9,"ID=gene")) %>% 
+  select(X9) %>% 
+  separate(X9, into = c("ID", "Name", "Biotype", "Description", "Geneid"), extra = "drop", sep = ";") %>% 
+  mutate(ID = str_remove(ID, "ID=gene:"),
+         true_name = case_when(
+           str_detect(Name, "Name") ~ str_remove(Name, "Name="),
+           str_detect(Name, "biotype") ~ ID
+           ), true_biotype = case_when(
+             str_detect(Name, "biotype") ~ str_remove(Name, "biotype="),
+             str_detect(Biotype, "biotype") ~ str_remove(Biotype, "biotype=")
+           ))
+c_type <- counts_simple %>% 
+  dplyr::slice(-1:-4) %>%
+  left_join(dplyr::select(annot, ID, true_biotype), by = c("Gene_ID" = "ID")) %>% 
+  dplyr::select(-Gene_ID) %>%
+  rename_with(function(x) "Type",last_col()) %>% 
+  group_by(Type) %>% 
+  summarise(across(everything(),sum)) %>% 
+  mutate(across(-Type, calc_relative)) %>% 
+  pivot_longer(-Type, values_to = "numbers", names_to = "mapping") 
+c_type_no_mrna <- counts_simple %>% 
+  dplyr::slice(-1:-4) %>%
+  left_join(dplyr::select(annot, ID, true_biotype), by = c("Gene_ID" = "ID")) %>% 
+  dplyr::select(-Gene_ID) %>%
+  rename_with(function(x) "Type",last_col()) %>% 
+  group_by(Type) %>% 
+  summarise(across(everything(),sum)) %>% 
+  filter(Type != "protein_coding") %>% 
+  mutate(across(-Type, calc_relative)) %>% 
+  pivot_longer(-Type, values_to = "numbers", names_to = "mapping") 
+rel_type_plot <- ggplot(c_type, aes(x=mapping, y=numbers, fill = fct_reorder(Type,numbers, .desc = T))) +
+  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Set3") +
+  labs(x = "", y = "Proportion of genes", fill = "Gene type") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) 
+rel_type_plot_no_mrna <- ggplot(c_type_no_mrna, aes(x=mapping, y=numbers, fill = fct_reorder(Type,numbers, .desc = T))) +
+  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Set3") +
+  labs(x = "", y = "Proportion of genes", fill = "Gene type") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) 
+#pdf(file = here::here("final EPEC figures/mapping stats by gene type.pdf"), width = 8, height = 6.3)
+rel_type_plot
+rel_type_plot_no_mrna
+#dev.off()
+```
+
+
+Apply EDAseq normalization to the data
+
+```{r edaseq}
+#Use EDAseq to normalize the libraries
+library(S4Vectors)
+library(EDASeq)
+c_mat <- counts_simple %>% 
+                     dplyr::select(-dplyr::last_col()) %>% 
+                     dplyr::slice(-1:-4) %>% 
+                     as.matrix()
+rownames(c_mat) <- counts_simple$Gene_ID [-1:-4]
+pData <- data.frame(genotype=vector(mode = "logical", length = ncol(c_mat)),
+                    timepoint = vector(mode = "logical", length = ncol(c_mat)),
+                    samples = colnames(c_mat),
+                    row.names = colnames(c_mat))
+pData <- pData %>% 
+  mutate(genotype = case_when(
+    str_detect(samples, "WT") ~ "WT",
+    str_detect(samples, "UIN") ~ "WT",
+    str_detect(samples, "N") ~ "N"
+  ), timepoint = case_when(
+    str_detect(samples, "UI") ~ 0,
+    str_detect(samples, "45") ~ 45,
+    str_detect(samples, "90") ~ 90,
+    str_detect(samples, "180") ~ 180,
+  ), true_genotype = case_when(
+    str_detect(samples, "WT") ~ "WT",
+    str_detect(samples, "N") ~ "N"
+  )) %>% dplyr::select(-samples)
+
+data <- newSeqExpressionSet(counts=c_mat,
+                            phenoData=pData)
+#Normalize the data next
+dataNorm <- betweenLaneNormalization(data, which="full") 
+#Plot the counts 
+#pdf(here::here("final EPEC figures/Normalization effect on the library.pdf"), width = 8, height = 6.3)
+boxplot(data, main = "Unnormalized counts", col = "dodgerblue3")
+boxplot(dataNorm, main = "Normalized counts", col = "dodgerblue3")
+#dev.off()
+#For DE we will create this analysis with offset values
+dataOffset <- betweenLaneNormalization(data,
+                                       which="full",offset=TRUE)
+```
+Next step is to use normalized counts in the DESEq2 analysis of differential expression
+```{r deseq}
+library(DESeq2)
+#Prepare the DESEq2 object and apply EDASeq normalization factors
+pData$group <- factor(paste0(pData$genotype,pData$timepoint))
+dds <- DESeqDataSetFromMatrix(countData = counts(data),
+                              colData = pData,
+                              design = ~ group)
+dds$group <- relevel(dds$group, ref= "WT0")
+normFactors <- exp(-1 * offst(dataOffset))
+normFactors <- normFactors / exp(rowMeans(log(normFactors)))
+normalizationFactors(dds) <- normFactors
+
+#Perform the DESEq2 analysis
+dds <- DESeq(dds)
+rld <- rlog(dds)
+
+normal_PCA <- plotPCA(rld, returnData = T, intgroup = "timepoint")
+#Plot the PCA graphs of the normalized counts
+#png(here::here("final EPEC figures/PCA plot of normalized counts.png"), width = 8, height = 6.3,
+ #   units = "in", res = 720)
+ggplot(data = normal_PCA, aes(shape = pData$true_genotype)) +
+  scale_color_manual(values = c("cyan2", "darkcyan","darkblue")) +
+  geom_point(mapping = aes(x = PC1, y = PC2, color = as.factor(timepoint)), size = 4) +
+  guides(color = guide_legend(title = "Time of infection (min)"),
+         shape = guide_legend(title = "EPEC Genotype")) +
+  scale_shape(labels = c(paste0(greeks("Delta"),"EscN EPEC"),"Wild-type EPEC"))
+#dev.off()
+```
+Identify differentially expressed genes
+```{r deseq-res}
+res90 <- results(dds, contrast = c("group","WT90", "WT0"))
+res180 <- results(dds, contrast = c("group","WT180", "WT0"))
+time_res <- merge(as.data.frame(res90), as.data.frame(res180), suffixes = c(".90",".180"), by = 0)
+time_res_annot <- time_res %>% 
+  left_join(dplyr::select(annot,ID,true_name,true_biotype), by = c("Row.names" = "ID"))
+#write.table(time_res_annot, here::here("final EPEC figures/EDAseq_normalized results comparing by time WT infection.txt"),
+ #          sep = "\t", row.names = F)
+
+
+res90vsn <- results(dds, contrast = c("group","WT90", "N90"))
+res180vsn <- results(dds, contrast = c("group","WT180", "N180")) #Some significant differences shown
+res180vsn_annot <- as.data.frame(res180vsn) %>% 
+  rownames_to_column(var = "ID")  %>% 
+  left_join(dplyr::select(annot, ID, true_name, true_biotype))
+#A lot of type 3 genes, bundle forming pili proteins, and some metabolism
+```
+Analyze loadings of the principal components in the data
+```{r pcatools}
+library(PCAtools)
+#Annotate the gene id to more meaningful gene names
+cnts <- assay(rld) 
+cnts_annot <- cnts %>% 
+  as_tibble(rownames = "ID") %>% 
+  select(ID) %>% 
+  left_join(dplyr::select(annot,ID,true_name))
+#Confirm the order of rows is the same and can move onto symbol mapping
+all(rownames(cnts) == cnts_annot$ID)
+newnames <- ifelse(duplicated(cnts_annot$true_name),cnts_annot$ID ,cnts_annot$true_name)
+#Rename rows that had a symbol name
+rownames(cnts) <- newnames
+p <- pca(cnts,colData(dds), removeVar = 0.1)
+#pdf(here::here("final EPEC figures/PCA tools analysis of PCA.pdf"), width = 8, height = 6.3)
+biplot(p, colby = "timepoint", shape = "genotype", showLoadings = T,gridlines.major = FALSE)
+biplot(p, colby = "timepoint", shape = "genotype",gridlines.major = FALSE)
+plotloadings(p,  rangeRetain = 0.01,
+    labSize = 4.0,
+    caption = "Top 1% variables")
+eigencorplot(p,
+    metavars = c('group','timepoint','genotype'),
+    col = c('darkblue', 'blue2', 'darkgrey', 'red2', 'darkred'))
+eigencorplot(p,
+    metavars = c('group','timepoint','genotype'),
+    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
+    cexCorval = 1.2,
+    fontCorval = 2,
+    posLab = 'all',
+    rotLabX = 45,
+    scale = TRUE,
+    main = bquote(Principal ~ component ~ Pearson ~ r^2 ~ correlates),
+    plotRsquared = TRUE,
+    corFUN = 'pearson',
+    corUSE = 'pairwise.complete.obs',
+    corMultipleTestCorrection = 'BH',
+    signifSymbols = c('****', '***', '**', '*', ''),
+    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
+biplot(p, x = "PC1", y = "PC3", colby = "timepoint", shape = "genotype",gridlines.major = FALSE)
+#dev.off()
+```
+Make volcano plots of differentially expressed genes
+```{r volcano}
+library(EnhancedVolcano)
+#shrink results
+res90lfc <- lfcShrink(dds, coef="group_WT90_vs_WT0", type="apeglm", res = res90)
+res180lfc <- lfcShrink(dds, coef="group_WT180_vs_WT0", type="apeglm", res = res180)
+all(rownames(res90lfc) == cnts_annot$ID)
+#pdf(here::here("final EPEC figures/Volcano plots.pdf"), width = 8, height = 6.3)
+plotMA(res90, main = "WT infection 90 min vs 0min \nResults without shrinking")
+plotMA(res90lfc, main = "WT infection 90 min vs 0min \nResults after apeglm shrinking")
+plotMA(res180, main = "WT infection 180 min vs 0min \nResults without shrinking")
+plotMA(res180lfc, main = "WT infection 180 min vs 0min \nResults after apeglm shrinking")
+
+EnhancedVolcano(res180lfc,
+    lab = cnts_annot$true_name,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    title = "Differentially expressed genes at 3hr of infection",
+    pointSize = 3,
+    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
+    legendPosition = 'right',
+    subtitle = NULL,
+    pCutoff = 0.05,
+    FCcutoff = 0.6)
+EnhancedVolcano(res180lfc,
+    lab = cnts_annot$true_name,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    title = "Differentially expressed genes at 3hr of infection",
+    pointSize = 3,
+    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
+    legendPosition = 'right',
+    subtitle = NULL,
+    selectLab = "",
+    pCutoff = 0.05,
+    FCcutoff = 0.6)
+EnhancedVolcano(res90lfc,
+    lab = cnts_annot$true_name,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    title = "Differentially expressed genes at 1.5hr of infection",
+    pointSize = 3,
+    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
+    legendPosition = 'right',
+    subtitle = NULL,
+    pCutoff = 0.05,
+    FCcutoff = 0.6)
+EnhancedVolcano(res90lfc,
+    lab = cnts_annot$true_name,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    title = "Differentially expressed genes at 1.5hr of infection",
+    pointSize = 3,
+    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
+    legendPosition = 'right',
+    subtitle = NULL,
+    selectLab = "",
+    pCutoff = 0.05,
+    FCcutoff = 0.6)
+#dev.off()
+```
+Apply clusterprofiler to differentially expressed data
+EPEC code in KEGG is ecg
+
+```{r clusterprofiler}
+library(clusterProfiler)
+library(enrichplot)
+library(pathview)
+
+#Prepare a genelist of EPEC differentially expressed genes at each time point
+gl_df_WT180 <- res180lfc %>% 
+  as_tibble(rownames = "ID") %>% 
+  filter(padj < 0.05) %>% 
+  arrange(desc(log2FoldChange))
+gl_WT180 <- set_names(gl_df_WT180$log2FoldChange,gl_df_WT180$ID) 
+  
+#Perform ora and gsea analysis on DE genes
+ora.180 <- enrichKEGG(gene = names(gl_WT180),
+                 organism     = 'ecg',
+                 universe = rownames(res180lfc),
+                 pvalueCutoff = 0.5)
+gsea.180 <- gseKEGG(geneList     = gl_WT180,
+               organism     = 'ecg',
+               pvalueCutoff = 0.2,
+               verbose      = FALSE)
+#Check out bacterial secretion pathways in KEGG and differentially expressed genes
+browseKEGG(gsea.180,"ecg03070")
+
+gl_df_WT90 <- res90lfc %>% 
+  as_tibble(rownames = "ID") %>% 
+  filter(padj < 0.05) %>% 
+  arrange(desc(log2FoldChange))
+gl_WT90 <- set_names(gl_df_WT90$log2FoldChange,gl_df_WT90$ID)
+#Perform ora and gsea analysis on DE genes
+ora.90 <- enrichKEGG(gene = names(gl_WT90),
+                 organism     = 'ecg',
+                 universe = rownames(res90lfc),
+                 pvalueCutoff = 0.5)
+gsea.90 <- gseKEGG(geneList     = gl_WT90,
+               organism     = 'ecg',
+               pvalueCutoff = 0.2,
+               verbose      = FALSE)
+
+#Visualize all the results
+#pdf(here::here("final EPEC figures/Functional profiling plots.pdf"), width = 6, height = 5)
+dotplot(ora.180, showCategory = 20) + labs(title = "ORA WT180 vs 0")
+dotplot(gsea.180, showCategory = 20) + labs(title = "GSEA WT180 vs 0")
+dotplot(ora.90, showCategory = 20) + labs(title = "ORA WT90 vs 0")
+dotplot(gsea.90, showCategory = 20) + labs(title = "GSEA WT90 vs 0")
+#dev.off()
+```
+
+
+
+
+
+
