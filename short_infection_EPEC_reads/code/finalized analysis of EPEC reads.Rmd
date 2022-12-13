@@ -224,7 +224,6 @@ dataOffset <- betweenLaneNormalization(data,
 ```
 Next step is to use normalized counts in the DESEq2 analysis of differential expression
 ```{r deseq}
-library(DESeq2)
 #Prepare the DESEq2 object and apply EDASeq normalization factors
 pData$group <- factor(paste0(pData$genotype,pData$timepoint))
 dds <- DESeqDataSetFromMatrix(countData = counts(data),
@@ -239,16 +238,24 @@ normalizationFactors(dds) <- normFactors
 dds <- DESeq(dds)
 rld <- rlog(dds)
 
-normal_PCA <- plotPCA(rld, returnData = T, intgroup = "timepoint")
+normal_PCA <- plotPCA(rld, returnData = T, intgroup = "group") %>% 
+  mutate(timepoint = as.numeric(str_remove(group, "[:alpha:]+")),
+         genotype = ifelse(timepoint == 0, str_remove(name, "[:digit:]+UI"), str_remove(name, "[:digit:]+"))) %>% 
+  mutate(genotype = fct_relevel(genotype, "WT", "N"))
+  
 #Plot the PCA graphs of the normalized counts
-#png(here::here("final EPEC figures/PCA plot of normalized counts.png"), width = 8, height = 6.3,
- #   units = "in", res = 720)
-ggplot(data = normal_PCA, aes(shape = pData$true_genotype)) +
-  scale_color_manual(values = c("cyan2", "darkcyan","darkblue")) +
-  geom_point(mapping = aes(x = PC1, y = PC2, color = as.factor(timepoint)), size = 4) +
+#png(here::here(str_c(res_path,"PCA plot of normalized counts.png")), width = 8, height = 6, units = "in", res = 1080)
+ggplot(data = normal_PCA, aes(shape = genotype)) +
+  scale_color_carto_c(palette = cont_pal_choice, breaks = c(0,45,90,180)) +
+  geom_point(mapping = aes(x = PC1, y = PC2, color = timepoint), size = 5) +
+  labs(title = "EDAseq normalized DESeq2 PCA plot \nnot including the outlier",
+       x = "PC1: 40% variance",
+       y = "PC2: 14% variance") +
   guides(color = guide_legend(title = "Time of infection (min)"),
-         shape = guide_legend(title = "EPEC Genotype")) +
-  scale_shape(labels = c(paste0(greeks("Delta"),"EscN EPEC"),"Wild-type EPEC"))
+         shape = guide_legend(title = "Strain")) +
+  scale_shape_manual(labels = c("WT" = "Wild-type EPEC",
+                                "N" = paste0(greeks("Delta"),"EscN EPEC")),
+                     values = c("Uninfected" = 15, "WT" = 16, "N" = 17))
 #dev.off()
 ```
 Identify differentially expressed genes
