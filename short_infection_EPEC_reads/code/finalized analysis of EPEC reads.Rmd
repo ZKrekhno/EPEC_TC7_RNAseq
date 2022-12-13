@@ -274,8 +274,8 @@ time_res <- list(res45,res90,res180) %>%
   reduce(left_join)
 time_res_annot <- time_res %>% 
   left_join(dplyr::select(annot,ID,true_name,true_biotype), by = c("geneid" = "ID"))
-write.table(time_res_annot, here::here(str_c(res_path, "tables/EDAseq_normalized results comparing by time WT infection.csv")),
-           sep = ",", row.names = F)
+#write.table(time_res_annot, here::here(str_c(res_path, "tables/EDAseq_normalized results comparing by time WT infection.csv")),
+ #          sep = ",", row.names = F)
 
 res45vsn <- results(dds, contrast = c("group","WT45", "N45"))
 res90vsn <- results(dds, contrast = c("group","WT90", "N90"))
@@ -286,17 +286,30 @@ time_resvsn_annot <- list(res45vsn,res90vsn,res180vsn) %>%
   map(rownames_to_column, var = "geneid") %>% 
   reduce(left_join) %>% 
   left_join(dplyr::select(annot, ID, true_name, true_biotype), by = c("geneid" = "ID"))
-write.table(time_resvsn_annot, here::here(str_c(res_path, "tables/EDAseq_normalized results comparing  WT and EscN infection.csv")),
-           sep = ",", row.names = F)
+#write.table(time_resvsn_annot, here::here(str_c(res_path, "tables/EDAseq_normalized results comparing  WT and EscN infection.csv")),
+ #          sep = ",", row.names = F)
 ```
-
 Check overlap of DE genes between induced by time and by working T3SS
 ```{r de-overlap}
+#Create a list of DE genes for each comparison
 per_time_de <- list(res45,res90,res180, res45vsn, res90vsn, res180vsn) %>% 
   set_names(str_c("vs", rep(c("Planktonic","dEscN"), each = 3), rep(c(45,90,180), times = 2), sep = "_")) %>% 
   map(as.data.frame) %>% 
-  map(filter,abs(log2FoldChange) >= 0.5, padj < 0.05) %>% 
-  map(pull, )
+  map(~filter(.x, abs(log2FoldChange) >= 0.5, padj < 0.05)) %>% 
+  map(rownames_to_column, var = "geneid") %>% 
+  map(left_join, dplyr::select(annot, ID, true_name, true_biotype), by = c("geneid" = "ID")) %>% 
+  map(pull, true_name)
+#Create a list of DE genes that were significant at any point either against time or 
+general_de <- list(reduce(per_time_de [c(1:3)], union), reduce(per_time_de [c(4:6)], union)) %>% 
+  set_names(c("vs Time","vs dEscN"))
+#Create and plot euler fits for these genes 
+per_time_de_fit <- euler(per_time_de, shape = "ellipse")
+general_de_fit <- euler(general_de, shape = "circle")
+
+#pdf(here::here(str_c(res_path, "Euler of DE genes between comparisons.pdf")), width = 8, height = 6)
+plot(per_time_de_fit, main = "Intersection of DE genes")
+plot(general_de_fit, quantities = list(type = c("counts","percent")), main = "Union of DE genes for category")
+#dev.off()
 ```
 
 
