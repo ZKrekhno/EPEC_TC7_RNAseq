@@ -33,7 +33,7 @@ library(rcartocolor)
 
 Define all helper functions and color choices
 ```{r include=TRUE}
-theme_set(theme_prism(base_size = 14))
+theme_set(theme_prism(base_size = 14) + theme(legend.title = element_text()))
 #Set color choices from CARTOcolors
 discrete_pal_choice <- "Bold"
 cont_pal_choice <- "BluYl"
@@ -109,8 +109,7 @@ mapped <-  counts_simple %>%
 raw_count_plot <- ggplot(mapped, aes(x=fct_reorder(mapping,time), y=numbers, fill = Gene_ID)) +
   geom_bar(stat = "identity") + scale_fill_carto_d(palette = discrete_pal_choice) +
   labs(x = "", y = "Raw counts") +
-  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6),
-        legend.title = element_text()) + 
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) + 
   guides(fill = guide_legend(title = "Mapping Status")) +
   facet_wrap(~strain, scales = "free", labeller = label_parsed)
 #Relative count stats
@@ -130,7 +129,7 @@ rel_count_plot
 
 Calculate statistics of types of transcripts mapped
 
-```{r}
+```{r map_by_type, fig.width=8, fig.height=5}
 #Prepare gene annotation from the gff3 file
 geneids <- read_delim(here::here(str_c(data_path,"EPEC_annot.rel-41.gff3")), 
        delim = "\t", escape_double = FALSE, 
@@ -159,11 +158,14 @@ c_type <- counts_simple %>%
   reshape2::melt() %>% 
   group_by(variable) %>% 
   mutate(rel_numbers = calc_relative(value)) %>% 
-  mutate(time = if_else(str_detect(mapping,"UI"), 
+  mutate(time = if_else(str_detect(variable,"UI"), 
                         0, 
-                        as.numeric(str_remove(str_extract(mapping, "[:digit:]+"), "^[:digit:]"))),
-         strain = if_else(str_detect(mapping,"WT"), str_c("bold(WT)"),str_c("bold(Delta)*bold(EscN)")))
-
+                        as.numeric(str_remove(str_extract(variable, "[:digit:]+"), "^[:digit:]"))),
+         strain = if_else(str_detect(variable,"WT"), str_c("bold(WT)"),str_c("bold(Delta)*bold(EscN)")))
+c_type_no_mrna <- c_type %>% 
+  filter(Type != "protein_coding") %>% 
+   group_by(variable) %>% 
+  mutate(rel_numbers = calc_relative(value))
 
 
 c_type <- counts_simple %>% 
@@ -185,16 +187,19 @@ c_type_no_mrna <- counts_simple %>%
   filter(Type != "protein_coding") %>% 
   mutate(across(-Type, calc_relative)) %>% 
   pivot_longer(-Type, values_to = "numbers", names_to = "mapping") 
-rel_type_plot <- ggplot(c_type, aes(x=mapping, y=numbers, fill = fct_reorder(Type,numbers, .desc = T))) +
+rel_type_plot <- ggplot(c_type, aes(x=fct_reorder(variable,time), y=rel_numbers, fill = fct_reorder(Type,rel_numbers, .desc = T))) +
   geom_bar(stat = "identity") + scale_fill_carto_d(palette = discrete_pal_choice) +
   labs(x = "", y = "Proportion of genes", fill = "Gene type") +
-  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) 
-rel_type_plot_no_mrna <- ggplot(c_type_no_mrna, aes(x=mapping, y=numbers, fill = fct_reorder(Type,numbers, .desc = T))) +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) +
+  facet_wrap(~strain, scales = "free", labeller = label_parsed)
+rel_type_plot_no_mrna <- ggplot(c_type_no_mrna, 
+                                aes(x=fct_reorder(variable,time), y=rel_numbers, fill = fct_reorder(Type,rel_numbers, .desc = T))) +
   geom_bar(stat = "identity") + scale_fill_carto_d(palette = discrete_pal_choice) +
   labs(x = "", y = "Proportion of genes", fill = "Gene type") +
-  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) 
-#pdf(file = here::here("final EPEC figures/mapping stats by gene type.pdf"), width = 8, height = 6.3)
-rel_type_plot
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) +
+  facet_wrap(~strain, scales = "free", labeller = label_parsed)
+#pdf(file = here::here(str_c(res_path,"mapping stats by gene type.pdf")), width = 8, height = 5)
+rel_type_plot 
 rel_type_plot_no_mrna
 #dev.off()
 ```
