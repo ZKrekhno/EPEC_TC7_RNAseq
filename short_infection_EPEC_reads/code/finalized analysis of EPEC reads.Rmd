@@ -499,28 +499,39 @@ Apply clusterprofiler to differentially expressed data
 EPEC code in KEGG is ecg
 
 ```{r clusterprofiler}
-library(clusterProfiler)
-library(enrichplot)
-library(pathview)
+#library(pathview)
+#If KEGG is giving troubles with clusterprofiler run this, can switch to wget instead of auto:
+#library(R.utils)
+#R.utils::setOption("clusterProfiler.download.method","auto")
+
+#Prep a list of each gene lists
+gl_df_list <- list(res45lfc,res90lfc,res180lfc, res45vsn,res90vsn, res180vsn) %>% 
+  set_names(str_c("vs", rep(c("Time","dEscN"), each = 3), rep(c(45,90,180), times = 2), sep = "_")) %>% 
+  map(as_tibble, rownames = "ID") %>% 
+  map(~filter(.x,padj < 0.05, abs(log2FoldChange) > 0.5)) %>% 
+  map(~arrange(.x,desc(log2FoldChange)))
+
+
 
 #Prepare a genelist of EPEC differentially expressed genes at each time point
 gl_df_WT180 <- res180lfc %>% 
   as_tibble(rownames = "ID") %>% 
-  filter(padj < 0.05) %>% 
+  filter(padj < 0.05, abs(log2FoldChange) > 0.5) %>% 
   arrange(desc(log2FoldChange))
 gl_WT180 <- set_names(gl_df_WT180$log2FoldChange,gl_df_WT180$ID) 
+
+search_kegg_organism('ecg', by = "kegg_code")
   
 #Perform ora and gsea analysis on DE genes
 ora.180 <- enrichKEGG(gene = names(gl_WT180),
                  organism     = 'ecg',
                  universe = rownames(res180lfc),
-                 pvalueCutoff = 0.5)
+                 pvalueCutoff = 0.05,
+                 qvalueCutoff = 0.05)
 gsea.180 <- gseKEGG(geneList     = gl_WT180,
                organism     = 'ecg',
-               pvalueCutoff = 0.2,
-               verbose      = FALSE)
-#Check out bacterial secretion pathways in KEGG and differentially expressed genes
-browseKEGG(gsea.180,"ecg03070")
+               pvalueCutoff = 0.05,
+               verbose      = T)
 
 gl_df_WT90 <- res90lfc %>% 
   as_tibble(rownames = "ID") %>% 
