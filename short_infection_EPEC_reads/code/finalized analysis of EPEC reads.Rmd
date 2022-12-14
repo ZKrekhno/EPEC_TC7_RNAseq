@@ -9,7 +9,7 @@ editor_options:
 ---
 
 
-```{r results='hide', message=FALSE, warning=FALSE}
+```{r lib-setup, results='hide', message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(include = TRUE)
 knitr::opts_chunk$set(fig.width = 6)
@@ -29,10 +29,11 @@ library(clusterProfiler)
 library(tidyverse)
 library(ggprism)
 library(rcartocolor)
+library(patchwork)
 ```
 
 Define all helper functions and color choices
-```{r include=TRUE}
+```{r helper, include=TRUE}
 theme_set(theme_prism(base_size = 14) + theme(legend.title = element_text()))
 #Set color choices from CARTOcolors
 discrete_pal_choice <- "Bold"
@@ -323,37 +324,121 @@ cnts_annot <- cnts %>%
   left_join(dplyr::select(annot,ID,true_name))
 #Confirm the order of rows is the same and can move onto symbol mapping
 all(rownames(cnts) == cnts_annot$ID)
-newnames <- ifelse(duplicated(cnts_annot$true_name),cnts_annot$ID ,cnts_annot$true_name)
-#Rename rows that had a symbol name
-rownames(cnts) <- newnames
+rownames(cnts) <- cnts_annot$true_name
 p <- pca(cnts,colData(dds), removeVar = 0.1)
-#pdf(here::here("final EPEC figures/PCA tools analysis of PCA.pdf"), width = 8, height = 6.3)
-biplot(p, colby = "timepoint", shape = "genotype", showLoadings = T,gridlines.major = FALSE)
+p_coord_meta <- p$rotated %>% 
+  merge(as.data.frame(colData(rld)), by=0) 
+#10 PCs explain 75% of variance, so just focus on those for linear regression
+pc_to_choose <- 10
+#Create the lists to store information on the linear model performance
+fit_list <- set_names(vector(mode = "list", length = pc_to_choose),
+                              nm = str_c("PC",1:pc_to_choose))
+signi_list <- set_names(vector(mode = "list", length = pc_to_choose),
+                              nm = str_c("PC",1:pc_to_choose))
+#Generally, we are testing to see if metadata dictate PC coordinates
+for (PC in seq_along(fit_list)) {
+  fit_list [[PC]] <- set_names(vector(mode = "list", length = 3),
+                               nm = c("group", "timepoint", "genotype"))
+  signi_list [[PC]] <- set_names(vector(mode = "list", length = 3),
+                                 nm = c("group", "timepoint", "genotype"))
+  for (metavar in c("group", "timepoint", "genotype")) {
+    frm <- as.formula(str_c("PC",PC, " ~ ", metavar))
+    fit_list [[PC]] [[metavar]] <- lm(frm, data = p_coord_meta)
+    sum_of_fit <- summary(fit_list [[PC]] [[metavar]])
+    signi_list [[PC]] [[metavar]] <- sum_of_fit$coefficients %>% 
+      as.data.frame() %>% 
+      mutate(R_squared = sum_of_fit$r.squared,
+             PC = str_c("PC",PC),
+             metavar = metavar) %>% 
+      rownames_to_column(var = "coef")
+  }
+}
+#Summarise liner model performance and plot the results
+signi_list_reduced <- signi_list %>% 
+  map_depth(1,reduce,bind_rows) %>% 
+  reduce(bind_rows) %>% 
+  filter(coef != "(Intercept)") %>% 
+  dplyr::rename(p = `Pr(>|t|)`) %>%  
+  mutate(signi = if_else(p<0.05, "yes","no"),
+         time = if_else(str_detect(coef,"group"), as.numeric(str_extract(coef, "[:digit:]+")), 0),
+         coef = fct_reorder(coef, time),
+         coef = fct_relevel(coef, "timepoint"))
+#Plot the results of regression
+ggplot(signi_list_reduced) +
+  geom_tile(aes(y=coef,x=fct_relevel(PC,"PC10", after = Inf), fill = p)) +
+  geom_text(data = filter(signi_list_reduced, signi == "yes"), aes(y=coef,x=fct_relevel(PC,"PC10", after = Inf)), 
+            label = "*", color = "white", size = 7, nudge_y = -0.02) +
+  labs(x = element_blank(), y = element_blank(), 
+       title = "Linear regression analysis\nidentifying relationships between metadata and PC",
+       caption = "For groups with genotype and time this shows\nsuccess in separation from WT EPEC at 0hr") +
+  scale_y_discrete(labels = c(timepoint = "Time of Infection",
+                              genotypeWT = "Effect of T3SS over time",
+                              groupWT45 = "WT EPEC at 45 min",
+                              groupWT90 = "WT EPEC at 90 min",
+                              groupWT180 = "WT EPEC at 180 min",
+                              groupN0 = bquote(Delta*"EscN EPEC before infection"),
+                              groupN45 = bquote(Delta*"EscN EPEC at 45 min"),
+                              groupN90 = bquote(Delta*"EscN EPEC at 90 min"),
+                              groupN180 = bquote(Delta*"EscN EPEC at 180 min"))) +
+  scale_fill_carto_c(palette = "BluYl", direction = -1, name = "p-value") +
+  theme_minimal(base_size = 16) +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        axis.ticks.x = element_line(color = "black"),
+        axis.ticks.y = element_line(color = "black"),
+        panel.grid.major = element_blank(),
+        axis.text = element_text(color = "black"),
+        axis.text.x = element_text(angle = 45, vjust = 0.6),
+        title = element_text(size = 12),
+        legend.title = element_text(size = 19))
+#ggsave(here::here(str_c(res_path,"Linear regression of metadata and PCA with respect to RUV.png")),width = 8, height = 6.66, dpi = 1080)
+
+signi_list_rsquare <- signi_list_reduced %>% 
+  distinct(metavar, PC, .keep_all = T) %>% 
+  mutate(metavar = str_to_title(metavar))
+
+fit_plot_rsquare <- a
+ggplot(signi_list_rsquare) +
+  geom_tile(aes(y=metavar,x=fct_relevel(PC,"PC10", after = Inf), fill = R_squared)) +
+  geom_text(data = filter(signi_list_rsquare, signi == "yes"), aes(y=metavar,x=fct_relevel(PC,"PC10", after = Inf)), 
+            label = "*", color = "white", size = 7, nudge_y = -0.02) +
+  labs(x = element_blank(), y = element_blank(), 
+       title = "Linear regression analysis\nidentifying relationships between metadata and PC") +
+  scale_y_discrete(labels = c(timepoint = "Time of Infection",
+                              genotypeWT = "Effect of T3SS over time",
+                              groupWT45 = "WT EPEC at 45 min",
+                              groupWT90 = "WT EPEC at 90 min",
+                              groupWT180 = "WT EPEC at 180 min",
+                              groupN0 = bquote(Delta*"EscN EPEC before infection"),
+                              groupN45 = bquote(Delta*"EscN EPEC at 45 min"),
+                              groupN90 = bquote(Delta*"EscN EPEC at 90 min"),
+                              groupN180 = bquote(Delta*"EscN EPEC at 180 min"))) +
+  scale_fill_carto_c(palette = "BluYl", direction = 1, name = bquote("R"^2*"-value")) +
+  theme_minimal(base_size = 16) +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        axis.ticks.x = element_line(color = "black"),
+        axis.ticks.y = element_line(color = "black"),
+        panel.grid.major = element_blank(),
+        axis.text = element_text(color = "black"),
+        axis.text.x = element_text(angle = 45, vjust = 0.6),
+        title = element_text(size = 12),
+        legend.title = element_text(size = 19))
+#ggsave(here::here(str_c(res_path,"Linear regression of metadata and PCA with respect to RUV R-square.png")),width = 8, height = 6.66, dpi = 1080)
+```
+
+
+
+```{r pcatools-old, fig.width=8, fig.height=6.3}
+#pdf(here::here(str_c(res_path,"PCA tools analysis of PCA.pdf")), width = 8, height = 6.3)
+screeplot(p)
 biplot(p, colby = "timepoint", shape = "genotype",gridlines.major = FALSE)
-plotloadings(p,  rangeRetain = 0.01,
-    labSize = 4.0,
-    caption = "Top 1% variables")
-eigencorplot(p,
-    metavars = c('group','timepoint','genotype'),
-    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
-    cexCorval = 1.2,
-    fontCorval = 2,
-    posLab = 'all',
-    rotLabX = 45,
-    scale = TRUE,
-    main = bquote(Principal ~ component ~ Pearson ~ r^2 ~ correlates),
-    plotRsquared = TRUE,
-    corFUN = 'pearson',
-    corUSE = 'pairwise.complete.obs',
-    corMultipleTestCorrection = 'BH',
-    signifSymbols = c('****', '***', '**', '*', ''),
-    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
 biplot(p, x = "PC1", y = "PC3", colby = "timepoint", shape = "genotype",gridlines.major = FALSE)
+plotloadings(p,  rangeRetain = 0.01,
+    labSize = 4.0,col = carto_pal(3,diverg_pal_choice),
+    caption = "Top 1% variables")
 #dev.off()
 ```
 Make volcano plots of differentially expressed genes
 ```{r volcano}
-library(EnhancedVolcano)
 #shrink results
 res90lfc <- lfcShrink(dds, coef="group_WT90_vs_WT0", type="apeglm", res = res90)
 res180lfc <- lfcShrink(dds, coef="group_WT180_vs_WT0", type="apeglm", res = res180)
