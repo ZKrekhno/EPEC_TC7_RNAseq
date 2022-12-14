@@ -440,61 +440,59 @@ plotloadings(p,  rangeRetain = 0.01,
 Make volcano plots of differentially expressed genes
 ```{r volcano}
 #shrink results
+res45lfc <- lfcShrink(dds, coef="group_WT45_vs_WT0", type="apeglm", res = res45)
 res90lfc <- lfcShrink(dds, coef="group_WT90_vs_WT0", type="apeglm", res = res90)
 res180lfc <- lfcShrink(dds, coef="group_WT180_vs_WT0", type="apeglm", res = res180)
-all(rownames(res90lfc) == cnts_annot$ID)
-#pdf(here::here("final EPEC figures/Volcano plots.pdf"), width = 8, height = 6.3)
+#Put into a list
+results_list <- list(res45lfc, res90lfc,res180lfc)
+#Prepare the results list for plotting
+res_df_list <- results_list %>% 
+  map(as.data.frame) %>% 
+  map(rownames_to_column, var = "gene") %>% 
+  map(mutate, signi = if_else(padj < 0.05 & abs(log2FoldChange) >= 0.5, "yes","no"))
+#Create the function for making a nice volcano plot
+volcano_ggplot <- function(res_df, title = "", to_label = F, n_lab = 10) {
+  p_empty <- ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), fill = signi, color = signi)) +
+    geom_hline(yintercept = -log10(0.05), lty = 2, lwd = 0.8, color = "grey30") +
+    geom_vline(xintercept = -0.5, lty = 2, lwd = 0.8, color = "grey30") +
+    geom_vline(xintercept = 0.5, lty = 2, lwd = 0.8, color = "grey30") +
+    geom_point(size = 4, shape = 21, alpha = 0.7) +
+    scale_color_manual(values = c("darkgrey", carto_pal(7,diverg_pal_choice) [7])) +
+    scale_fill_manual(values = c("darkgrey", carto_pal(7,diverg_pal_choice) [7])) +
+    guides(color = 'none', fill = 'none') +
+    labs(x = bquote(~Log[2] ~ "fold change"),
+         y = bquote(~-Log[10] ~ italic(P)),
+         title = title) +
+    theme_prism(base_size = 24) +
+    theme(title = element_text(size = 10),
+          axis.title = element_text(size = 24))
+  if(to_label) {
+    res_df_top <- res_df %>% 
+      filter(signi == "yes") %>% 
+      arrange(desc(abs(log2FoldChange))) %>% 
+      slice_head(n=n_lab)
+    p_labelled <- p_empty + 
+      geom_label_repel(data = res_df_top, aes(x = log2FoldChange, y = -log10(padj), label = gene),
+                       size = 4, max.overlaps = Inf, color = "black", fill = "white")
+    return(p_labelled)
+  } else {
+    return(p_empty)
+  }
+}
+#Print the volcano plots - each should get its own png file
+volcano_list <- map2(res_df_list, 
+                     c("WT infection at 45min","WT infection at 90min", "WT infection at 180min"),
+                     volcano_ggplot)
+#walk2(volcano_list, c("WT infection at 45min","WT infection at 90min", "WT infection at 180min"),
+ #     ~ggsave(here::here(str_c(res_path,"Volcano_plot of ",.y,".png")),plot = .x), width = 8, height = 6, dpi = 1080)
+
+#pdf(here::here(str_c(res_path,"MA plots.pdf")), width = 8, height = 6.3)
+plotMA(res45, main = "WT infection 45 min vs 0min \nResults without shrinking")
+plotMA(res45lfc, main = "WT infection 45 min vs 0min \nResults after apeglm shrinking")
 plotMA(res90, main = "WT infection 90 min vs 0min \nResults without shrinking")
 plotMA(res90lfc, main = "WT infection 90 min vs 0min \nResults after apeglm shrinking")
 plotMA(res180, main = "WT infection 180 min vs 0min \nResults without shrinking")
 plotMA(res180lfc, main = "WT infection 180 min vs 0min \nResults after apeglm shrinking")
-
-EnhancedVolcano(res180lfc,
-    lab = cnts_annot$true_name,
-    x = 'log2FoldChange',
-    y = 'pvalue',
-    title = "Differentially expressed genes at 3hr of infection",
-    pointSize = 3,
-    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
-    legendPosition = 'right',
-    subtitle = NULL,
-    pCutoff = 0.05,
-    FCcutoff = 0.6)
-EnhancedVolcano(res180lfc,
-    lab = cnts_annot$true_name,
-    x = 'log2FoldChange',
-    y = 'pvalue',
-    title = "Differentially expressed genes at 3hr of infection",
-    pointSize = 3,
-    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
-    legendPosition = 'right',
-    subtitle = NULL,
-    selectLab = "",
-    pCutoff = 0.05,
-    FCcutoff = 0.6)
-EnhancedVolcano(res90lfc,
-    lab = cnts_annot$true_name,
-    x = 'log2FoldChange',
-    y = 'pvalue',
-    title = "Differentially expressed genes at 1.5hr of infection",
-    pointSize = 3,
-    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
-    legendPosition = 'right',
-    subtitle = NULL,
-    pCutoff = 0.05,
-    FCcutoff = 0.6)
-EnhancedVolcano(res90lfc,
-    lab = cnts_annot$true_name,
-    x = 'log2FoldChange',
-    y = 'pvalue',
-    title = "Differentially expressed genes at 1.5hr of infection",
-    pointSize = 3,
-    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
-    legendPosition = 'right',
-    subtitle = NULL,
-    selectLab = "",
-    pCutoff = 0.05,
-    FCcutoff = 0.6)
 #dev.off()
 ```
 Apply clusterprofiler to differentially expressed data
