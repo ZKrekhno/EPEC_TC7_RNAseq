@@ -582,21 +582,13 @@ Finally make a heatmap for top DE genes
 ```{r heatmap, fig.width=8, fig.height=6}
 heat_mat <- assay(rld)
 #Select 100 most DE genes from WT infection at 3hr
-top_genes <- time_res %>% 
+top_genes <- time_res_annot %>% 
   filter(padj.180 < 0.05, abs(log2FoldChange.180) >= 0.5) %>% 
   arrange(desc(abs(log2FoldChange.180))) %>% 
   slice_head(n=100)
 heat_mat_select <- heat_mat [top_genes$geneid,]
-#Create a mapping for ID to symbol
-geneids <- mapIds(org.Hs.eg.db, keys = str_replace_all(rownames(heat_mat_select), "\\.[1-9]([0-9])?", ""), 
-                  keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first") %>% 
-  as.data.frame() %>% 
-  bind_cols(rownames(heat_mat_select)) %>% 
-  dplyr::select("symbol" = 1, "rowname" = `...2`)
-#Get nice names or keep ensembl IDs
-naOrDup <- is.na(geneids$symbol) | duplicated(geneids$symbol)
-geneids$gene_name <- ifelse(naOrDup, rownames(geneids), geneids$symbol)
-rownames(heat_mat_select) <- geneids$gene_name
+
+rownames(heat_mat_select) <- top_genes$true_name
 mat <- heat_mat_select - rowMeans(heat_mat_select)
 #Set the breaks to be able to center the heatmap colors around 0
 mycolors <- rcartocolor::carto_pal(name = diverg_pal_choice)
@@ -609,23 +601,37 @@ color_scheme <- colorRampPalette(mycolors) (pal_length)
 #For some reason fct_recode did not want to work the delta sign, so had to work around it
 df <- as.data.frame(colData(rld)) %>%  
   mutate(`Infection status` = fct_recode(genotype, "T3SS-deficient EPEC" = "N",
-                                            "Wild-type EPEC" = "WT","Uninfected" = "UI"), .keep = 'unused') %>% 
-  mutate(Timepoint = fct_recode(as.factor(timepoint), "Uninfected" = "0", "45 min" = "45",
+                                            "Wild-type EPEC" = "WT"), .keep = 'unused') %>% 
+  mutate(Timepoint = fct_recode(as.factor(timepoint), "Prior to infection" = "0", "45 min" = "45",
                                 "90 min" = "90","180 min" = "180")) %>% 
   select(-group, -timepoint)
 
 pheatmap(mat, annotation_col=df, 
          annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
-                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
-                                                         "Uninfected" = carto_pal(12,discrete_pal_choice) [10]),
-                                  "Timepoint" = c("Uninfected" = carto_pal(4,cont_pal_choice) [1],
+                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1]),
+                                  "Timepoint" = c("Prior to infection" = carto_pal(4,cont_pal_choice) [1],
                                                   "45 min" = carto_pal(4,cont_pal_choice) [2],
                                                   "90 min" = carto_pal(4,cont_pal_choice) [3],
                                                   "180 min" = carto_pal(4,cont_pal_choice) [4])),
          fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
-         show_rownames = F, show_colnames = F, border_color = NA,
+         show_rownames = T, show_colnames = F, border_color = NA, fontsize_row = 3.5,
          color = color_scheme)
 ```
+```{r heatmap-save, eval=FALSE}
+pheatmap(mat, annotation_col=df, 
+         annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1]),
+                                  "Timepoint" = c("Prior to infection" = carto_pal(4,cont_pal_choice) [1],
+                                                  "45 min" = carto_pal(4,cont_pal_choice) [2],
+                                                  "90 min" = carto_pal(4,cont_pal_choice) [3],
+                                                  "180 min" = carto_pal(4,cont_pal_choice) [4])),
+         fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
+         show_rownames = T, show_colnames = F, border_color = NA, fontsize_row = 3.5,
+         color = color_scheme,
+         width = 8, height = 6, 
+         filename = here::here(str_c(res_path,"top 100 DE genes WT180.png")))
+```
+
 
 
 
