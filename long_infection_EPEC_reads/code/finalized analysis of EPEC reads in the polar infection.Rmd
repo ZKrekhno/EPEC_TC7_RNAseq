@@ -398,5 +398,98 @@ plotMA(resWTvsN, main = "Results without shrinking")
 plotMA(resWTvsNlfc, main = "Results after apeglm shrinking")
 #dev.off()
 ```
+Apply clusterprofiler to differentially expressed data
+EPEC code in KEGG is ecg
+
+For GSEA, use all genes, not just DE - https://hbctraining.github.io/Training-modules/DGE-functional-analysis/lessons/functional_analysis_2019.html
+
+```{r clusterprofiler}
+#If KEGG is giving troubles with clusterprofiler run this, can switch to wget instead of auto:
+#library(R.utils)
+R.utils::setOption("clusterProfiler.download.method","auto")
+
+#Prep a list of each gene lists
+gl_all_df_list <- list(resWTvsNlfc) %>% 
+  set_names("WTvsN") %>% 
+  map(as_tibble, rownames = "ID") 
+gl_df_list <- gl_all_df_list %>% 
+  map(~filter(.x,padj < 0.05, abs(log2FoldChange) > 0.5)) %>% 
+  map(~arrange(.x,desc(log2FoldChange)))
+#Get the genelists prepared
+gl_gene_list <- gl_df_list %>% 
+  map(~set_names(pull(.x,var = "log2FoldChange"), pull(.x, var = "ID")))
+gse_gene_list <- gl_all_df_list %>% 
+  map(~arrange(.x,desc(log2FoldChange))) %>% 
+  map(~set_names(pull(.x,var = "log2FoldChange"), pull(.x, var = "ID")))
+#Run the ora and gsea analyses
+ora_list <- gl_gene_list %>% 
+  map(~enrichKEGG(gene = names(.x),
+                  organism     = 'ecg',
+                  universe = rownames(resWTvsNlfc),
+                  pvalueCutoff = 0.05,
+                  qvalueCutoff = 0.05))
+gse_list <- gse_gene_list %>% 
+  map(~gseKEGG(geneList     = .x,
+               organism     = 'ecg',
+               pvalueCutoff = 0.05,
+               verbose      = F))
+
+
+#Also divide genes by up and down regulation
+gl_updown_list <- gl_gene_list
+for (comp in seq_along(gl_gene_list)) {
+  genes_vector <- gl_gene_list [[comp]]
+  gl_updown_list [[comp]] <- vector(mode = "list", length = 2) %>% 
+    set_names(c("up","down"))
+  gl_updown_list [[comp]] [[1]] <- genes_vector [genes_vector > 0]
+  gl_updown_list [[comp]] [[2]] <- genes_vector [genes_vector < 0]
+}
+#Repeat ora and gse analyses
+ora_updown_list <- gl_updown_list %>% 
+  map_depth(2,~enrichKEGG(gene = names(.x),
+                  organism     = 'ecg',
+                  universe = rownames(resWTvsNlfc),
+                  pvalueCutoff = 0.05,
+                  qvalueCutoff = 0.05))
+ora_updown_df <- ora_updown_list %>% 
+  map_depth(2,as.data.frame) %>% 
+  map(~map2(.x, c("Up","Down"), 
+            ~mutate(.x, Direction = .y))) %>% 
+  map(reduce, bind_rows) %>% 
+  map(mutate, geneRatio = as.numeric(DOSE::parse_ratio(GeneRatio)))
+```
+
+
+```{r clusterprofiler-plot, eval=FALSE, fig.width=7, fig.height=5}
+#Visualize all the results
+#pdf(here::here(str_c(res_path,"Functional profiling plots.pdf")), width = 7, height = 5)
+walk2(ora_list, names(ora_list),
+      ~print(dotplot(.x) + scale_color_carto_c(palette = cont_pal_choice, direction = -1) +
+               labs(title = str_c("whole ORA ",.y))))
+walk2(keep(gse_list, ~nrow(.)>0), names(keep(gse_list, ~nrow(.)>0)),
+      ~print(dotplot(.x, x = "NES") + scale_color_carto_c(palette = cont_pal_choice, direction = -1) +
+               labs(title = str_c("GSEA ",.y))))
+
+walk2(ora_updown_df, names(ora_updown_df),
+      ~print(ggplot(.x, 
+                    aes(x=geneRatio, y = fct_reorder(Description, geneRatio),
+                        color = p.adjust, fill = p.adjust, size = Count, shape = Direction)) +
+               geom_point(color = "black") +
+               scale_shape_manual(values = c("Up" = 24, "Down" = 25)) +
+               scale_size_continuous(range = c(4,8)) +
+               scale_color_carto_c(palette = cont_pal_choice, direction = -1) +
+               scale_fill_carto_c(palette = cont_pal_choice, direction = -1) +
+               theme_minimal(base_size = 12) +
+               guides(shape = guide_legend(override.aes = list(size = 4.5, fill = carto_pal(2,cont_pal_choice) [2]))) +
+               labs(x="GeneRatio", y=element_blank(), title = .y) +
+               theme(panel.border = element_rect(fill = NA, color = "black"),
+                     axis.text = element_text(color = "black"))))
+
+#dev.off()
+#print out all the clusterprofiler results
+#walk2(c(ora_list,keep(gse_list, ~nrow(.)>0), ora_updown_df), 
+ #     c(str_c("whole_ORA",names(ora_list)), str_c("GSEA_", names(keep(gse_list, ~nrow(.)>0))), names(ora_updown_df)),
+  #    ~write_csv(as.data.frame(.x), file = here::here(str_c(res_path,"tables/",.y,".csv"))))
+```
 
 
