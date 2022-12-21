@@ -497,6 +497,8 @@ plotMA(res180lfc, main = "WT infection 180 min vs 0min \nResults after apeglm sh
 Apply clusterprofiler to differentially expressed data
 EPEC code in KEGG is ecg
 
+For GSEA, use all genes, not just DE
+
 ```{r clusterprofiler}
 #library(pathview)
 #If KEGG is giving troubles with clusterprofiler run this, can switch to wget instead of auto:
@@ -504,13 +506,17 @@ EPEC code in KEGG is ecg
 R.utils::setOption("clusterProfiler.download.method","auto")
 
 #Prep a list of each gene lists
-gl_df_list <- list(res45lfc,res90lfc,res180lfc, res45vsn,res90vsn, res180vsn) %>% 
+gl_all_df_list <- list(res45lfc,res90lfc,res180lfc, res45vsn,res90vsn, res180vsn) %>% 
   set_names(str_c("vs", rep(c("Time","dEscN"), each = 3), rep(c(45,90,180), times = 2), sep = "_")) %>% 
-  map(as_tibble, rownames = "ID") %>% 
+  map(as_tibble, rownames = "ID") 
+gl_df_list <- gl_all_df_list %>% 
   map(~filter(.x,padj < 0.05, abs(log2FoldChange) > 0.5)) %>% 
   map(~arrange(.x,desc(log2FoldChange)))
 #Get the genelists prepared
 gl_gene_list <- gl_df_list %>% 
+  map(~set_names(pull(.x,var = "log2FoldChange"), pull(.x, var = "ID")))
+gse_gene_list <- gl_all_df_list %>% 
+  map(~arrange(.x,desc(log2FoldChange))) %>% 
   map(~set_names(pull(.x,var = "log2FoldChange"), pull(.x, var = "ID")))
 #Run the ora and gsea analyses
 ora_list <- gl_gene_list %>% 
@@ -519,7 +525,7 @@ ora_list <- gl_gene_list %>%
                   universe = rownames(res180lfc),
                   pvalueCutoff = 0.05,
                   qvalueCutoff = 0.05))
-gse_list <- gl_gene_list %>% 
+gse_list <- gse_gene_list %>% 
   map(~gseKEGG(geneList     = .x,
                organism     = 'ecg',
                pvalueCutoff = 0.05,
@@ -558,7 +564,7 @@ walk2(ora_list, names(ora_list),
       ~print(dotplot(.x) + scale_color_carto_c(palette = cont_pal_choice, direction = -1) +
                labs(title = str_c("whole ORA ",.y))))
 walk2(keep(gse_list, ~nrow(.)>0), names(keep(gse_list, ~nrow(.)>0)),
-      ~print(dotplot(.x) + scale_color_carto_c(palette = cont_pal_choice, direction = -1) +
+      ~print(dotplot(.x, x = "NES") + scale_color_carto_c(palette = cont_pal_choice, direction = -1) +
                labs(title = str_c("GSEA ",.y))))
 
 walk2(ora_updown_df, names(ora_updown_df),
