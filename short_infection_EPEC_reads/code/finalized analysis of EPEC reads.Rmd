@@ -577,6 +577,10 @@ walk2(ora_updown_df, names(ora_updown_df),
                      axis.text = element_text(color = "black"))))
 
 #dev.off()
+#print out all the clusterprofiler results
+#walk2(c(ora_list,keep(gse_list, ~nrow(.)>0), ora_updown_df), 
+ #     c(str_c("whole_ORA",names(ora_list)), str_c("GSEA_", names(keep(gse_list, ~nrow(.)>0))), names(ora_updown_df)),
+  #    ~write_csv(as.data.frame(.x), file = here::here(str_c(res_path,"tables/",.y,".csv"))))
 ```
 Finally make a heatmap for top DE genes
 ```{r heatmap, fig.width=8, fig.height=6}
