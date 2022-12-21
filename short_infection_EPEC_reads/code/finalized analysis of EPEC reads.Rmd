@@ -497,7 +497,7 @@ plotMA(res180lfc, main = "WT infection 180 min vs 0min \nResults after apeglm sh
 Apply clusterprofiler to differentially expressed data
 EPEC code in KEGG is ecg
 
-For GSEA, use all genes, not just DE
+For GSEA, use all genes, not just DE - https://hbctraining.github.io/Training-modules/DGE-functional-analysis/lessons/functional_analysis_2019.html
 
 ```{r clusterprofiler}
 #library(pathview)
