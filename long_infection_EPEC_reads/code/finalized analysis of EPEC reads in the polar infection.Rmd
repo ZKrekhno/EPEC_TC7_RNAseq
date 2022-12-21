@@ -211,36 +211,37 @@ dataOffset <- betweenLaneNormalization(data,
                                        which="full",offset=TRUE)
 ```
 
-Next step is to use normalized counts in the DESEq2 analysis of differential expression
+Next step is to use normalized counts in the DESEq2 analysis of differential expression, have to use RUV-normalized library (same as from human reads - use human weights)
 ```{r deseq}
-library(DESeq2)
 #Prepare the DESEq2 object and apply EDASeq normalization factors
-pData$group <- factor(paste0(pData$genotype,pData$timepoint))
+pData <- read.table(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/tables/RUVs meta and weights.txt"))
+pData <- pData %>% 
+  filter(genotype != "UI")
 dds <- DESeqDataSetFromMatrix(countData = counts(data),
                               colData = pData,
-                              design = ~ group)
+                              design = ~ W_1 + W_2 + group)
 dds$group <- relevel(dds$group, ref= "N9")
 
 #Perform the DESEq2 analysis
 dds <- DESeq(dds)
 rld <- rlog(dds)
 
-normal_PCA <- plotPCA(rld, returnData = T, intgroup = "timepoint")
+normal_PCA <- plotPCA(rld, returnData = T, intgroup = "group")
 #Plot the PCA graphs of the normalized counts
-png(here::here("final EPEC figures/PCA plot of unnormalized counts.png"), width = 12, height = 10,
-    units = "in", res = 720)
+#png(here::here(str_c(res_path,"PCA plot of normalized counts.png")), width = 8, height = 6, units = "in", res = 1080)
 ggplot(data = normal_PCA, aes(shape = pData$genotype, color = pData$genotype)) +
-  scale_color_manual(name = "Infection status",
-                    labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
+  scale_color_manual(labels = c("N" = bquote(Delta*"EscN EPEC"),
+                                "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
+                     values = c("WT" = carto_pal(12,discrete_pal_choice) [2], 
+                                "N" = carto_pal(12,discrete_pal_choice) [1])) +
+  geom_point(mapping = aes(x = PC1, y = PC2), size = 5) +
+  labs(title = "RUVs corrected PCA plot", shape = "Infection", color = "Infection",
+       x = "PC1: 40% variance", y = "PC2: 33% variance") +
+  scale_shape_manual(labels = c("N" = bquote(Delta*"EscN EPEC"),
                                 "WT" = "Wild-type EPEC"),
-                     values = c("WT" = "darkblue", "N" = "forestgreen")) +
-  geom_point(mapping = aes(x = PC1, y = PC2), size = 4) +
-  labs(title = "Raw DESeq2 PCA plot") +
-  scale_shape_manual(name = "Infection status",
-                     labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
-                                "WT" = "Wild-type EPEC"),
-                     values = c("WT" = 16, "N" = 17))
-dev.off()
+                     values = c( "WT" = 16, "N" = 17)) +
+  theme(legend.position = "bottom", legend.title = element_text())
+#dev.off()
 ```
 Identify differentially expressed genes
 ```{r deseq-res}
@@ -250,84 +251,151 @@ summary(resWTvsN)
 time_res_annot <- resWTvsN %>% 
   as_tibble(rownames = "Row.names") %>% 
   left_join(dplyr::select(annot,ID,true_name,true_biotype), by = c("Row.names" = "ID"))
-#write.table(time_res_annot, here::here("final EPEC figures/Unnormalized results comparing WTvsEscN.txt"),
- #          sep = "\t", row.names = F)
+#write.table(time_res_annot, here::here(str_c(res_path, "tables/RUV+EDAseq_normalized results comparing  WT and EscN infection.csv")),
+ #          sep = ",", row.names = F)
 ```
 
 Analyze loadings of the principal components in the data
-```{r pcatools}
-library(PCAtools)
+```{r pcatools, fig.width=8, fig.height=6.3}
 #Annotate the gene id to more meaningful gene names
 cnts <- assay(rld) 
 cnts_annot <- cnts %>% 
   as_tibble(rownames = "ID") %>% 
-  dplyr::select(ID) %>% 
+  select(ID) %>% 
   left_join(dplyr::select(annot,ID,true_name))
 #Confirm the order of rows is the same and can move onto symbol mapping
 all(rownames(cnts) == cnts_annot$ID)
-newnames <- ifelse(duplicated(cnts_annot$true_name),cnts_annot$ID ,cnts_annot$true_name)
-#Rename rows that had a symbol name
-rownames(cnts) <- newnames
-p <- pca(cnts,colData(dds), removeVar = 0.1)
-#pdf(here::here("final EPEC figures/PCA tools analysis of PCA.pdf"), width = 12, height = 10)
-biplot(p, colby = "genotype", shape = "genotype", showLoadings = T,gridlines.major = FALSE)
-biplot(p, colby = "genotype", shape = "genotype",gridlines.major = FALSE)
-plotloadings(p,  rangeRetain = 0.01,
-    labSize = 4.0,
-    caption = "Top 1% variables")
-eigencorplot(p,
-             components = getComponents(p,c(1:6)),
-             metavars = c('group','genotype'))
-eigencorplot(p,
-             components = getComponents(p,1:6),
-    metavars = c('group','genotype'),
-    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
-    cexCorval = 1.2,
-    fontCorval = 2,
-    posLab = 'all',
-    rotLabX = 45,
-    scale = TRUE,
-    main = bquote(Principal ~ component ~ Pearson ~ r^2 ~ correlates),
-    plotRsquared = TRUE,
-    corFUN = 'pearson',
-    corUSE = 'pairwise.complete.obs',
-    corMultipleTestCorrection = 'BH',
-    signifSymbols = c('****', '***', '**', '*', ''),
-    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
-#dev.off()
+rownames(cnts) <- cnts_annot$true_name
+p <- PCAtools::pca(cnts,colData(dds), removeVar = 0.1)
+p_coord_meta <- p$rotated %>% 
+  merge(as.data.frame(colData(rld)), by=0) 
+#6 PCs explain 100% of variance, so just focus on those for linear regression
+pc_to_choose <- 6
+#Create the lists to store information on the linear model performance
+fit_list <- set_names(vector(mode = "list", length = pc_to_choose),
+                              nm = str_c("PC",1:pc_to_choose))
+signi_list <- set_names(vector(mode = "list", length = pc_to_choose),
+                              nm = str_c("PC",1:pc_to_choose))
+#Generally, we are testing to see if metadata dictate PC coordinates
+for (PC in seq_along(fit_list)) {
+  fit_list [[PC]] <- set_names(vector(mode = "list", length = 1),
+                               nm = c("group"))
+  signi_list [[PC]] <- set_names(vector(mode = "list", length = 1),
+                                 nm = c("group"))
+  for (metavar in c("group")) {
+    frm <- as.formula(str_c("PC",PC, " ~ ", metavar))
+    fit_list [[PC]] [[metavar]] <- lm(frm, data = p_coord_meta)
+    sum_of_fit <- summary(fit_list [[PC]] [[metavar]])
+    signi_list [[PC]] [[metavar]] <- sum_of_fit$coefficients %>% 
+      as.data.frame() %>% 
+      mutate(R_squared = sum_of_fit$r.squared,
+             PC = str_c("PC",PC),
+             metavar = metavar) %>% 
+      rownames_to_column(var = "coef")
+  }
+}
+#Summarise liner model performance and plot the results
+signi_list_reduced <- signi_list %>% 
+  map_depth(1,reduce,bind_rows) %>% 
+  reduce(bind_rows) %>% 
+  filter(coef != "(Intercept)") %>% 
+  dplyr::rename(p = `Pr(>|t|)`) %>%  
+  mutate(signi = if_else(p<0.05, "yes","no"))
+#Plot the results of regression
+ggplot(signi_list_reduced) +
+  geom_tile(aes(y=coef,x=PC, fill = p)) +
+  geom_text(data = filter(signi_list_reduced, signi == "yes"), aes(y=coef,x=PC), 
+            label = "*", color = "white", size = 7, nudge_y = -0.02) +
+  labs(x = element_blank(), y = element_blank(), 
+       title = "Linear regression analysis\nidentifying relationships between metadata and PC") +
+  scale_y_discrete(labels = c(groupWT9 = "Group")) +
+  scale_fill_carto_c(palette = "BluYl", direction = -1, name = "p-value") +
+  theme_minimal(base_size = 16) +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        axis.ticks.x = element_line(color = "black"),
+        axis.ticks.y = element_line(color = "black"),
+        panel.grid.major = element_blank(),
+        axis.text = element_text(color = "black"),
+        axis.text.x = element_text(angle = 45, vjust = 0.6),
+        title = element_text(size = 12),
+        legend.title = element_text(size = 19))
+#ggsave(here::here(str_c(res_path,"Linear regression of metadata and PCA with respect to RUV.png")),width = 8, height = 6.66, dpi = 1080)
+
+signi_list_rsquare <- signi_list_reduced %>% 
+  distinct(metavar, PC, .keep_all = T) %>% 
+  mutate(metavar = str_to_title(metavar))
+
+ggplot(signi_list_rsquare) +
+  geom_tile(aes(y=metavar,x=PC, fill = R_squared)) +
+  geom_text(data = filter(signi_list_rsquare, signi == "yes"), aes(y=metavar,x=PC), 
+            label = "*", color = "white", size = 7, nudge_y = -0.02) +
+  labs(x = element_blank(), y = element_blank(), 
+       title = "Linear regression analysis\nidentifying relationships between metadata and PC") +
+  scale_y_discrete(labels = c(groupWT9 = "Group")) +
+  scale_fill_carto_c(palette = "BluYl", direction = 1, name = bquote("R"^2*"-value")) +
+  theme_minimal(base_size = 16) +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        axis.ticks.x = element_line(color = "black"),
+        axis.ticks.y = element_line(color = "black"),
+        panel.grid.major = element_blank(),
+        axis.text = element_text(color = "black"),
+        axis.text.x = element_text(angle = 45, vjust = 0.6),
+        title = element_text(size = 12),
+        legend.title = element_text(size = 19))
+#ggsave(here::here(str_c(res_path,"Linear regression of metadata and PCA with respect to RUV R-square.png")),width = 6, height = 4, dpi = 1080)
 ```
+
 Make volcano plots of differentially expressed genes
 ```{r volcano}
-library(EnhancedVolcano)
 #shrink results
 resWTvsNlfc <- lfcShrink(dds, coef="group_WT9_vs_N9", type="apeglm", res = resWTvsN)
 all(rownames(resWTvsNlfc) == cnts_annot$ID)
-#pdf(here::here("final EPEC figures/Volcano plots.pdf"), width = 12, height = 10)
-DESeq2::plotMA(resWTvsN, main = bquote(WT ~ infection ~ vs.~ Delta ~ EscN ~ before ~ shrink))
-DESeq2::plotMA(resWTvsNlfc, main = bquote(WT ~ infection ~ vs.~ Delta ~ EscN ~ after ~ shrink))
-EnhancedVolcano(resWTvsNlfc,
-    lab = cnts_annot$true_name,
-    x = 'log2FoldChange',
-    y = 'pvalue',
-    title = "Differentially expressed genes at 9hr of infection",
-    pointSize = 3,
-    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
-    legendPosition = 'right',
-    subtitle = NULL,
-    pCutoff = 0.05,
-    FCcutoff = 0.6)
-EnhancedVolcano(resWTvsNlfc,
-    lab = cnts_annot$true_name,
-    x = 'log2FoldChange',
-    y = 'pvalue',
-    title = "Differentially expressed genes at 9hr of infection",
-    pointSize = 3,
-    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
-    legendPosition = 'right',
-    subtitle = NULL,
-    selectLab = "",
-    pCutoff = 0.05,
-    FCcutoff = 0.6)
+#Put into a list
+results_list <- list(resWTvsNlfc)
+#Prepare the results list for plotting
+res_df_list <- results_list %>% 
+  map(as.data.frame) %>% 
+  map(rownames_to_column, var = "gene") %>% 
+  map(mutate, signi = if_else(padj < 0.05 & abs(log2FoldChange) >= 0.5, "yes","no"))
+#Create the function for making a nice volcano plot
+volcano_ggplot <- function(res_df, title = "", to_label = F, n_lab = 10) {
+  p_empty <- ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), fill = signi, color = signi)) +
+    geom_hline(yintercept = -log10(0.05), lty = 2, lwd = 0.8, color = "grey30") +
+    geom_vline(xintercept = -0.5, lty = 2, lwd = 0.8, color = "grey30") +
+    geom_vline(xintercept = 0.5, lty = 2, lwd = 0.8, color = "grey30") +
+    geom_point(size = 4, shape = 21, alpha = 0.7) +
+    scale_color_manual(values = c("darkgrey", carto_pal(7,diverg_pal_choice) [7])) +
+    scale_fill_manual(values = c("darkgrey", carto_pal(7,diverg_pal_choice) [7])) +
+    guides(color = 'none', fill = 'none') +
+    labs(x = bquote(~Log[2] ~ "fold change"),
+         y = bquote(~-Log[10] ~ italic(P)),
+         title = title) +
+    theme_prism(base_size = 24) +
+    theme(title = element_text(size = 10),
+          axis.title = element_text(size = 24))
+  if(to_label) {
+    res_df_top <- res_df %>% 
+      filter(signi == "yes") %>% 
+      arrange(desc(abs(log2FoldChange))) %>% 
+      slice_head(n=n_lab)
+    p_labelled <- p_empty + 
+      geom_label_repel(data = res_df_top, aes(x = log2FoldChange, y = -log10(padj), label = gene),
+                       size = 4, max.overlaps = Inf, color = "black", fill = "white")
+    return(p_labelled)
+  } else {
+    return(p_empty)
+  }
+}
+#Print the volcano plots - each should get its own png file
+volcano_list <- map2(res_df_list, 
+                     c("WT vs T3SS mutant"),
+                     volcano_ggplot)
+#walk2(volcano_list, c("WT vs T3SS mutant"),
+ #     ~ggsave(here::here(str_c(res_path,"Volcano_plot of ",.y,".png")),plot = .x), width = 8, height = 6, dpi = 1080)
+
+#pdf(here::here(str_c(res_path,"MA plots.pdf")), width = 8, height = 6.3)
+plotMA(resWTvsN, main = "Results without shrinking")
+plotMA(resWTvsNlfc, main = "Results after apeglm shrinking")
 #dev.off()
 ```
 
