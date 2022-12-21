@@ -243,6 +243,17 @@ plotloadings(p,  rangeRetain = 0.01,
     caption = "Top 1% variables") + theme(legend.title = element_text())
 #dev.off()
 ```
+Print out normalized counts
+```{r norm-counts-print, eval=FALSE}
+norm_cnts <- counts(dds, normalized = T) %>% 
+  as_tibble(rownames = "geneid") %>% 
+  mutate(ensemble_geneid = str_replace_all(geneid, "\\.[1-9]([0-9])?", "")) %>% 
+  left_join(enframe(geneids), by = c("ensemble_geneid" = "name")) %>% 
+  mutate(true_name = if_else(is.na(value)|duplicated(value), ensemble_geneid, value))
+#write_csv(norm_cnts,here::here(str_c(res_path, "tables/normalized counts.csv")))
+```
+
+
 Make volcano plots of differentially expressed genes
 ```{r volcano}
 #shrink results
