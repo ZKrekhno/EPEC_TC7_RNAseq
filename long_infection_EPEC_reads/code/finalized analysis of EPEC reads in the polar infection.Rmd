@@ -1,0 +1,326 @@
+---
+title: "Finalized analysis of EPEC reads in Polarized infection"
+output: 
+  html_notebook:
+    fig_width: 6
+    fig_height: 5
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r lib-setup, results='hide', message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(include = TRUE)
+knitr::opts_chunk$set(fig.width = 6)
+knitr::opts_chunk$set(fig.height = 5)
+library(greekLetters)
+library(RUVSeq)
+library(EDASeq)
+library(DESeq2)
+library(PCAtools)
+library(EGSEA)
+library(limma)
+library(pheatmap)
+library(eulerr)
+library(UpSetR)
+library(clusterProfiler)
+library(tidyverse)
+library(ggprism)
+library(rcartocolor)
+library(patchwork)
+```
+
+Define all helper functions and color choices
+```{r helper, include=TRUE}
+theme_set(theme_prism(base_size = 14) + theme(legend.title = element_text()))
+#Set color choices from CARTOcolors
+discrete_pal_choice <- "Bold"
+cont_pal_choice <- "BluYl"
+diverg_pal_choice <- "Geyser"
+#Helper functions
+calc_relative <- function(x) x/sum(x) * 100
+#Set up paths for data, and results
+data_path <- "short_infection_EPEC_reads/data/"
+res_path <- "short_infection_EPEC_reads/results/"
+```
+
+#Read in the count data and rename the columns to fit the sample names
+
+```{r readorigstar}
+counts <- read.table("all_EPEC_reads_STAR.txT",header = F, sep = "\t", stringsAsFactors = F)
+#Next manipulate the table to remove redundant columns and only keep relevant columns (1 columns with gene names, and the rest with counts for reverse stranded library
+counts_simple <- counts %>% 
+  dplyr::select(Gene_ID = V1, UI92 = V4, UI93 = V8, UI96 = V12, N92 = V16, N93 = V20, WT96 = V24, WT91 = V28, WT94 = V32, N95 = V36)
+
+filter <- apply(dplyr::select(counts_simple,-Gene_ID),1,function(x) mean(x)>5)
+counts_simple <- counts_simple [filter,] %>% 
+  mutate(Gene_ID = str_remove(Gene_ID, "(gene:)|(transcript:)"))
+  
+#write.table(counts_simple,
+ #           file=here::here("final EPEC figures/only_reverse_strand_counts_cleaned.txt"),sep = "\t", row.names = F)
+```
+
+Visualize EscN counts per sample:
+The EscN gene is: E2348C_3948
+```{r escn-counts, eval=FALSE}
+counts_simple %>% 
+  filter(Gene_ID == "E2348C_3948") %>% 
+  pivot_longer(-Gene_ID, names_to = "samples", values_to = "numbers") %>% 
+  ggplot() +
+  geom_point(aes(x=samples, y = numbers)) +
+  labs(y = "counts", title = "counts for EscN gene") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.6))
+ggsave(here::here("final EPEC figures/raw counts for escN after relabeling.png"),width = 12, height = 10)
+```
+
+Vis mapping stats
+```{r vis-align-stats}
+#Visualize alignment statistics
+boxplot(dplyr::slice(counts_simple, -1:-4) %>% dplyr::select(-Gene_ID), main = "Raw EPEC counts")
+counts_stats <- counts_simple %>% 
+  dplyr::slice(1:4) %>% 
+  pivot_longer(-Gene_ID, values_to = "numbers", names_to = "mapping")
+mapped <-  counts_simple %>%
+  dplyr::select(-Gene_ID) %>%
+  summarise(across(everything(), sum)) %>% 
+  pivot_longer(everything(),values_to = "numbers", names_to = "mapping") %>% 
+  mutate(Gene_ID = "Mapped") %>% 
+  bind_rows(counts_stats) %>% 
+  mutate(Gene_ID = fct_relevel(str_to_title(str_replace(Gene_ID, "N_","")), "Mapped"))
+
+#Raw counts stats
+raw_count_plot <- ggplot(mapped, aes(x=mapping, y=numbers, fill = Gene_ID)) +
+  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Accent") +
+  labs(x = "", y = "Raw counts") +theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) + 
+  guides(fill = guide_legend(title = "Mapping Status"))
+calc_relative <- function(x) x/sum(x) * 100
+#Relative count stats
+rel_map <- mapped %>% 
+  pivot_wider(Gene_ID, names_from = mapping, values_from = numbers) %>%  
+  mutate(across(-Gene_ID, calc_relative)) %>% 
+  pivot_longer(-Gene_ID,values_to = "numbers", names_to = "mapping")
+rel_count_plot <-ggplot(rel_map, aes(x=mapping, y=numbers, fill = Gene_ID)) +
+  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Accent") +
+  labs(x = "", y = "Proportion of counts") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) + 
+  guides(fill = guide_legend(title = "Mapping Status"))
+pdf(file = here::here("final EPEC figures/mapping stats.pdf"), width = 12, height = 10)
+raw_count_plot
+rel_count_plot
+dev.off()
+```
+
+Calculate statistics of types of transcripts mapped. Remove UI samples from consideration from this point on
+
+```{r}
+#Prepare gene annotation from the gff3 file
+geneids <- read_delim("EPEC_annot.rel-41.gff3", 
+       delim = "\t", escape_double = FALSE, 
+       col_names = FALSE, trim_ws = TRUE, skip = 11) 
+annot <- geneids %>% 
+  filter(X3 == "gene" | X3 == "pseudogene" | X3 == "rRNA_gene" | 
+           X3 == "tRNA_gene" | X3 == "ncRNA_gene") %>% 
+  filter(str_detect(X9,"ID=gene")) %>% 
+  dplyr::select(X9) %>% 
+  separate(X9, into = c("ID", "Name", "Biotype", "Description", "Geneid"), extra = "drop", sep = ";") %>% 
+  mutate(ID = str_remove(ID, "ID=gene:"),
+         true_name = case_when(
+           str_detect(Name, "Name") ~ str_remove(Name, "Name="),
+           str_detect(Name, "biotype") ~ ID
+           ), true_biotype = case_when(
+             str_detect(Name, "biotype") ~ str_remove(Name, "biotype="),
+             str_detect(Biotype, "biotype") ~ str_remove(Biotype, "biotype=")
+           ))
+counts_simple <- counts_simple %>% 
+  dplyr::select(-contains("UI"))
+c_type <- counts_simple %>% 
+  dplyr::slice(-1:-4) %>%
+  left_join(dplyr::select(annot, ID, true_biotype), by = c("Gene_ID" = "ID")) %>% 
+  dplyr::select(-Gene_ID) %>%
+  rename_with(function(x) "Type",last_col()) %>% 
+  group_by(Type) %>% 
+  summarise(across(everything(),sum)) %>% 
+  mutate(across(-Type, calc_relative)) %>% 
+  pivot_longer(-Type, values_to = "numbers", names_to = "mapping") 
+c_type_no_mrna <- counts_simple %>% 
+  dplyr::slice(-1:-4) %>%
+  left_join(dplyr::select(annot, ID, true_biotype), by = c("Gene_ID" = "ID")) %>% 
+  dplyr::select(-Gene_ID) %>%
+  rename_with(function(x) "Type",last_col()) %>% 
+  group_by(Type) %>% 
+  summarise(across(everything(),sum)) %>% 
+  filter(Type != "protein_coding") %>% 
+  mutate(across(-Type, calc_relative)) %>% 
+  pivot_longer(-Type, values_to = "numbers", names_to = "mapping") 
+rel_type_plot <- ggplot(c_type, aes(x=mapping, y=numbers, fill = fct_reorder(Type,numbers, .desc = T))) +
+  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Set3") +
+  labs(x = "", y = "Proportion of genes", fill = "Gene type") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) 
+rel_type_plot_no_mrna <- ggplot(c_type_no_mrna, aes(x=mapping, y=numbers, fill = fct_reorder(Type,numbers, .desc = T))) +
+  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Set3") +
+  labs(x = "", y = "Proportion of genes", fill = "Gene type") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) 
+pdf(file = here::here("final EPEC figures/mapping stats by gene type.pdf"), width = 12, height = 10)
+rel_type_plot
+rel_type_plot_no_mrna
+dev.off()
+```
+
+Apply EDAseq normalization to the data
+
+```{r edaseq}
+#Use EDAseq to normalize the libraries
+library(S4Vectors)
+library(EDASeq)
+c_mat <- counts_simple %>% 
+                     dplyr::select(-1) %>% 
+                     dplyr::slice(-1:-4) %>% 
+                     as.matrix()
+rownames(c_mat) <- counts_simple$Gene_ID [-1:-4]
+pData <- data.frame(genotype=vector(mode = "logical", length = ncol(c_mat)),
+                    timepoint = vector(mode = "logical", length = ncol(c_mat)),
+                    samples = colnames(c_mat),
+                    row.names = colnames(c_mat))
+pData <- pData %>% 
+  mutate(genotype = case_when(
+    str_detect(samples, "WT") ~ "WT",
+    str_detect(samples, "UIN") ~ "WT",
+    str_detect(samples, "N") ~ "N"
+  ), timepoint = "9") %>% 
+  dplyr::select(-samples)
+
+data <- newSeqExpressionSet(counts=c_mat,
+                            phenoData=pData)
+#Normalize the data next
+dataNorm <- betweenLaneNormalization(data, which="full") 
+#Plot the counts 
+pdf(here::here("final EPEC figures/Normalization effect on the library.pdf"), width = 12, height = 10)
+boxplot(data, main = "Unnormalized counts", col = "dodgerblue3")
+boxplot(dataNorm, main = "Normalized counts", col = "dodgerblue3")
+dev.off()
+#For DE we will create this analysis with offset values
+dataOffset <- betweenLaneNormalization(data,
+                                       which="full",offset=TRUE)
+```
+
+Next step is to use normalized counts in the DESEq2 analysis of differential expression
+```{r deseq}
+library(DESeq2)
+#Prepare the DESEq2 object and apply EDASeq normalization factors
+pData$group <- factor(paste0(pData$genotype,pData$timepoint))
+dds <- DESeqDataSetFromMatrix(countData = counts(data),
+                              colData = pData,
+                              design = ~ group)
+dds$group <- relevel(dds$group, ref= "N9")
+
+#Perform the DESEq2 analysis
+dds <- DESeq(dds)
+rld <- rlog(dds)
+
+normal_PCA <- plotPCA(rld, returnData = T, intgroup = "timepoint")
+#Plot the PCA graphs of the normalized counts
+png(here::here("final EPEC figures/PCA plot of unnormalized counts.png"), width = 12, height = 10,
+    units = "in", res = 720)
+ggplot(data = normal_PCA, aes(shape = pData$genotype, color = pData$genotype)) +
+  scale_color_manual(name = "Infection status",
+                    labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
+                                "WT" = "Wild-type EPEC"),
+                     values = c("WT" = "darkblue", "N" = "forestgreen")) +
+  geom_point(mapping = aes(x = PC1, y = PC2), size = 4) +
+  labs(title = "Raw DESeq2 PCA plot") +
+  scale_shape_manual(name = "Infection status",
+                     labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
+                                "WT" = "Wild-type EPEC"),
+                     values = c("WT" = 16, "N" = 17))
+dev.off()
+```
+Identify differentially expressed genes
+```{r deseq-res}
+resWTvsN <- results(dds, contrast = c("group","WT9", "N9"))
+summary(resWTvsN)
+
+time_res_annot <- resWTvsN %>% 
+  as_tibble(rownames = "Row.names") %>% 
+  left_join(dplyr::select(annot,ID,true_name,true_biotype), by = c("Row.names" = "ID"))
+#write.table(time_res_annot, here::here("final EPEC figures/Unnormalized results comparing WTvsEscN.txt"),
+ #          sep = "\t", row.names = F)
+```
+
+Analyze loadings of the principal components in the data
+```{r pcatools}
+library(PCAtools)
+#Annotate the gene id to more meaningful gene names
+cnts <- assay(rld) 
+cnts_annot <- cnts %>% 
+  as_tibble(rownames = "ID") %>% 
+  dplyr::select(ID) %>% 
+  left_join(dplyr::select(annot,ID,true_name))
+#Confirm the order of rows is the same and can move onto symbol mapping
+all(rownames(cnts) == cnts_annot$ID)
+newnames <- ifelse(duplicated(cnts_annot$true_name),cnts_annot$ID ,cnts_annot$true_name)
+#Rename rows that had a symbol name
+rownames(cnts) <- newnames
+p <- pca(cnts,colData(dds), removeVar = 0.1)
+#pdf(here::here("final EPEC figures/PCA tools analysis of PCA.pdf"), width = 12, height = 10)
+biplot(p, colby = "genotype", shape = "genotype", showLoadings = T,gridlines.major = FALSE)
+biplot(p, colby = "genotype", shape = "genotype",gridlines.major = FALSE)
+plotloadings(p,  rangeRetain = 0.01,
+    labSize = 4.0,
+    caption = "Top 1% variables")
+eigencorplot(p,
+             components = getComponents(p,c(1:6)),
+             metavars = c('group','genotype'))
+eigencorplot(p,
+             components = getComponents(p,1:6),
+    metavars = c('group','genotype'),
+    col = c('white', 'cornsilk1', 'gold', 'forestgreen', 'darkgreen'),
+    cexCorval = 1.2,
+    fontCorval = 2,
+    posLab = 'all',
+    rotLabX = 45,
+    scale = TRUE,
+    main = bquote(Principal ~ component ~ Pearson ~ r^2 ~ correlates),
+    plotRsquared = TRUE,
+    corFUN = 'pearson',
+    corUSE = 'pairwise.complete.obs',
+    corMultipleTestCorrection = 'BH',
+    signifSymbols = c('****', '***', '**', '*', ''),
+    signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1))
+#dev.off()
+```
+Make volcano plots of differentially expressed genes
+```{r volcano}
+library(EnhancedVolcano)
+#shrink results
+resWTvsNlfc <- lfcShrink(dds, coef="group_WT9_vs_N9", type="apeglm", res = resWTvsN)
+all(rownames(resWTvsNlfc) == cnts_annot$ID)
+#pdf(here::here("final EPEC figures/Volcano plots.pdf"), width = 12, height = 10)
+DESeq2::plotMA(resWTvsN, main = bquote(WT ~ infection ~ vs.~ Delta ~ EscN ~ before ~ shrink))
+DESeq2::plotMA(resWTvsNlfc, main = bquote(WT ~ infection ~ vs.~ Delta ~ EscN ~ after ~ shrink))
+EnhancedVolcano(resWTvsNlfc,
+    lab = cnts_annot$true_name,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    title = "Differentially expressed genes at 9hr of infection",
+    pointSize = 3,
+    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
+    legendPosition = 'right',
+    subtitle = NULL,
+    pCutoff = 0.05,
+    FCcutoff = 0.6)
+EnhancedVolcano(resWTvsNlfc,
+    lab = cnts_annot$true_name,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    title = "Differentially expressed genes at 9hr of infection",
+    pointSize = 3,
+    col = c("darkgrey","red3","dodgerblue2","forestgreen"),
+    legendPosition = 'right',
+    subtitle = NULL,
+    selectLab = "",
+    pCutoff = 0.05,
+    FCcutoff = 0.6)
+#dev.off()
+```
+
+
