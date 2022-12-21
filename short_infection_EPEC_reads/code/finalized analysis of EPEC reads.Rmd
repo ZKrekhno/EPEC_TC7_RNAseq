@@ -712,6 +712,14 @@ ggplot(mito_counts, aes(x=timepoint,y=count, color = true_name)) +
 #ggsave(here::here(str_c(res_path,"Mitochondrial effector counts over time.png")), width = 7, height = 5, dpi = 1080)
 ```
 
+Finally export normalized counts for correlations
+```{r export-counts, eval=FALSE}
+norm_cnts <- counts(dds, normalized = T) %>% 
+  as_tibble(rownames = "geneid")
+#write_csv(norm_cnts,here::here(str_c(res_path,"tables/normalized_counts.csv")))
+```
+
+
 
 
 
