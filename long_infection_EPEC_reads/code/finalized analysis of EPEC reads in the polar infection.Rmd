@@ -18,11 +18,9 @@ library(RUVSeq)
 library(EDASeq)
 library(DESeq2)
 library(PCAtools)
-library(EGSEA)
 library(limma)
 library(pheatmap)
 library(eulerr)
-library(UpSetR)
 library(clusterProfiler)
 library(tidyverse)
 library(ggprism)
@@ -40,14 +38,14 @@ diverg_pal_choice <- "Geyser"
 #Helper functions
 calc_relative <- function(x) x/sum(x) * 100
 #Set up paths for data, and results
-data_path <- "short_infection_EPEC_reads/data/"
-res_path <- "short_infection_EPEC_reads/results/"
+data_path <- "long_infection_EPEC_reads/data/"
+res_path <- "long_infection_EPEC_reads/results/"
 ```
 
 #Read in the count data and rename the columns to fit the sample names
 
 ```{r readorigstar}
-counts <- read.table("all_EPEC_reads_STAR.txT",header = F, sep = "\t", stringsAsFactors = F)
+counts <- read.table(here::here(str_c(data_path,"all_EPEC_reads_STAR.txt")),header = F, sep = "\t", stringsAsFactors = F)
 #Next manipulate the table to remove redundant columns and only keep relevant columns (1 columns with gene names, and the rest with counts for reverse stranded library
 counts_simple <- counts %>% 
   dplyr::select(Gene_ID = V1, UI92 = V4, UI93 = V8, UI96 = V12, N92 = V16, N93 = V20, WT96 = V24, WT91 = V28, WT94 = V32, N95 = V36)
@@ -56,72 +54,85 @@ filter <- apply(dplyr::select(counts_simple,-Gene_ID),1,function(x) mean(x)>5)
 counts_simple <- counts_simple [filter,] %>% 
   mutate(Gene_ID = str_remove(Gene_ID, "(gene:)|(transcript:)"))
   
-#write.table(counts_simple,
- #           file=here::here("final EPEC figures/only_reverse_strand_counts_cleaned.txt"),sep = "\t", row.names = F)
+#write.table(counts_simple,file=here::here(str_c(res_path,"tables/only_reverse_strand_counts_cleaned.txt")),sep = "\t", row.names = F)
+counts_simple <- counts_simple [,str_detect(colnames(counts_simple),"UI", negate = T)]
 ```
 
 Visualize EscN counts per sample:
 The EscN gene is: E2348C_3948
 ```{r escn-counts, eval=FALSE}
-counts_simple %>% 
+escn_counts <- counts_simple %>% 
   filter(Gene_ID == "E2348C_3948") %>% 
   pivot_longer(-Gene_ID, names_to = "samples", values_to = "numbers") %>% 
-  ggplot() +
-  geom_point(aes(x=samples, y = numbers)) +
-  labs(y = "counts", title = "counts for EscN gene") +
+  mutate(time = if_else(str_detect(samples,"UI"), 
+                        0, 
+                        as.numeric(str_remove(str_extract(samples, "[:digit:]+"), "^[:digit:]"))),
+         strain = if_else(str_detect(samples,"WT"), str_c("bold(WT)"),str_c("bold(Delta)*bold(EscN)"))) %>% 
+  ggplot() + 
+  geom_point(aes(x=fct_reorder(samples,time), y = numbers), size = 3) +
+  labs(y = "counts", title = "counts for EscN gene", x = element_blank()) +
+  facet_wrap(~strain, ncol = 1, scales = "free", labeller = label_parsed) +
   theme(axis.text.x = element_text(angle = 75, vjust = 0.6))
-ggsave(here::here("final EPEC figures/raw counts for escN after relabeling.png"),width = 12, height = 10)
+escn_counts_toscale <- escn_counts + facet_wrap(~strain, scales = "free_x" ,ncol = 1, labeller = label_parsed)
+
+#ggsave(here::here(str_c(res_path,"raw counts for escN.png")),plot = escn_counts,width = 6, height = 8, dpi = 1080)
+#ggsave(here::here(str_c(res_path,"raw counts for escN_toscale.png")),plot = escn_counts_toscale, width = 6, height = 8, dpi = 1080)
 ```
 
-Vis mapping stats
-```{r vis-align-stats}
+Visualize mapping stats
+```{r vis-align-stats, fig.width=8, fig.height=5.5}
 #Visualize alignment statistics
-boxplot(dplyr::slice(counts_simple, -1:-4) %>% dplyr::select(-Gene_ID), main = "Raw EPEC counts")
 counts_stats <- counts_simple %>% 
   dplyr::slice(1:4) %>% 
   pivot_longer(-Gene_ID, values_to = "numbers", names_to = "mapping")
 mapped <-  counts_simple %>%
-  dplyr::select(-Gene_ID) %>%
+  select(-Gene_ID) %>%
   summarise(across(everything(), sum)) %>% 
   pivot_longer(everything(),values_to = "numbers", names_to = "mapping") %>% 
   mutate(Gene_ID = "Mapped") %>% 
   bind_rows(counts_stats) %>% 
-  mutate(Gene_ID = fct_relevel(str_to_title(str_replace(Gene_ID, "N_","")), "Mapped"))
+  group_by(mapping) %>% 
+  mutate(rel_numbers = calc_relative(numbers)) %>% 
+  mutate(Gene_ID = fct_relevel(str_to_title(str_replace(Gene_ID, "N_","")), "Mapped")) %>% 
+  mutate(time = if_else(str_detect(mapping,"UI"), 
+                        0, 
+                        as.numeric(str_remove(str_extract(mapping, "[:digit:]+"), "^[:digit:]"))),
+         strain = if_else(str_detect(mapping,"WT"), str_c("bold(WT)"),str_c("bold(Delta)*bold(EscN)")))
 
 #Raw counts stats
-raw_count_plot <- ggplot(mapped, aes(x=mapping, y=numbers, fill = Gene_ID)) +
-  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Accent") +
-  labs(x = "", y = "Raw counts") +theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) + 
-  guides(fill = guide_legend(title = "Mapping Status"))
-calc_relative <- function(x) x/sum(x) * 100
-#Relative count stats
-rel_map <- mapped %>% 
-  pivot_wider(Gene_ID, names_from = mapping, values_from = numbers) %>%  
-  mutate(across(-Gene_ID, calc_relative)) %>% 
-  pivot_longer(-Gene_ID,values_to = "numbers", names_to = "mapping")
-rel_count_plot <-ggplot(rel_map, aes(x=mapping, y=numbers, fill = Gene_ID)) +
-  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Accent") +
-  labs(x = "", y = "Proportion of counts") +
+raw_count_plot <- ggplot(mapped, aes(x=fct_reorder(mapping,time), y=numbers, fill = Gene_ID)) +
+  geom_bar(stat = "identity") + scale_fill_carto_d(palette = discrete_pal_choice) +
+  labs(x = "", y = "Raw counts") +
   theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) + 
-  guides(fill = guide_legend(title = "Mapping Status"))
-pdf(file = here::here("final EPEC figures/mapping stats.pdf"), width = 12, height = 10)
+  guides(fill = guide_legend(title = "Mapping Status")) +
+  facet_wrap(~strain, scales = "free", labeller = label_parsed)
+#Relative count stats
+rel_count_plot <- ggplot(mapped, aes(x=fct_reorder(mapping,time), y=rel_numbers, fill = Gene_ID)) +
+  geom_bar(stat = "identity") + scale_fill_carto_d(palette = discrete_pal_choice) +
+  labs(x = "", y = "Proportion of counts") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6),
+        legend.title = element_text()) + 
+  guides(fill = guide_legend(title = "Mapping Status")) +
+  facet_wrap(~strain, scales = "free", labeller = label_parsed)
+
+#pdf(file = here::here(str_c(res_path,"mapping stats.pdf")), width = 8, height = 5.5)
 raw_count_plot
 rel_count_plot
-dev.off()
+#dev.off()
 ```
 
-Calculate statistics of types of transcripts mapped. Remove UI samples from consideration from this point on
+Calculate statistics of types of transcripts mapped
 
-```{r}
+```{r map_by_type, fig.width=8, fig.height=5}
 #Prepare gene annotation from the gff3 file
-geneids <- read_delim("EPEC_annot.rel-41.gff3", 
+geneids <- read_delim(here::here(str_c(data_path,"EPEC_annot.rel-41.gff3")), 
        delim = "\t", escape_double = FALSE, 
        col_names = FALSE, trim_ws = TRUE, skip = 11) 
 annot <- geneids %>% 
   filter(X3 == "gene" | X3 == "pseudogene" | X3 == "rRNA_gene" | 
            X3 == "tRNA_gene" | X3 == "ncRNA_gene") %>% 
   filter(str_detect(X9,"ID=gene")) %>% 
-  dplyr::select(X9) %>% 
+  select(X9) %>% 
   separate(X9, into = c("ID", "Name", "Biotype", "Description", "Geneid"), extra = "drop", sep = ";") %>% 
   mutate(ID = str_remove(ID, "ID=gene:"),
          true_name = case_when(
@@ -130,9 +141,8 @@ annot <- geneids %>%
            ), true_biotype = case_when(
              str_detect(Name, "biotype") ~ str_remove(Name, "biotype="),
              str_detect(Biotype, "biotype") ~ str_remove(Biotype, "biotype=")
-           ))
-counts_simple <- counts_simple %>% 
-  dplyr::select(-contains("UI"))
+           )) %>% 
+  mutate(true_name = if_else(duplicated(true_name), ID, true_name))
 c_type <- counts_simple %>% 
   dplyr::slice(-1:-4) %>%
   left_join(dplyr::select(annot, ID, true_biotype), by = c("Gene_ID" = "ID")) %>% 
@@ -140,38 +150,37 @@ c_type <- counts_simple %>%
   rename_with(function(x) "Type",last_col()) %>% 
   group_by(Type) %>% 
   summarise(across(everything(),sum)) %>% 
-  mutate(across(-Type, calc_relative)) %>% 
-  pivot_longer(-Type, values_to = "numbers", names_to = "mapping") 
-c_type_no_mrna <- counts_simple %>% 
-  dplyr::slice(-1:-4) %>%
-  left_join(dplyr::select(annot, ID, true_biotype), by = c("Gene_ID" = "ID")) %>% 
-  dplyr::select(-Gene_ID) %>%
-  rename_with(function(x) "Type",last_col()) %>% 
-  group_by(Type) %>% 
-  summarise(across(everything(),sum)) %>% 
+  reshape2::melt() %>% 
+  group_by(variable) %>% 
+  mutate(rel_numbers = calc_relative(value)) %>% 
+  mutate(time = if_else(str_detect(variable,"UI"), 
+                        0, 
+                        as.numeric(str_remove(str_extract(variable, "[:digit:]+"), "^[:digit:]"))),
+         strain = if_else(str_detect(variable,"WT"), str_c("bold(WT)"),str_c("bold(Delta)*bold(EscN)")))
+c_type_no_mrna <- c_type %>% 
   filter(Type != "protein_coding") %>% 
-  mutate(across(-Type, calc_relative)) %>% 
-  pivot_longer(-Type, values_to = "numbers", names_to = "mapping") 
-rel_type_plot <- ggplot(c_type, aes(x=mapping, y=numbers, fill = fct_reorder(Type,numbers, .desc = T))) +
-  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Set3") +
-  labs(x = "", y = "Proportion of genes", fill = "Gene type") +
-  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) 
-rel_type_plot_no_mrna <- ggplot(c_type_no_mrna, aes(x=mapping, y=numbers, fill = fct_reorder(Type,numbers, .desc = T))) +
-  geom_bar(stat = "identity") + scale_fill_brewer(palette = "Set3") +
-  labs(x = "", y = "Proportion of genes", fill = "Gene type") +
-  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) 
-pdf(file = here::here("final EPEC figures/mapping stats by gene type.pdf"), width = 12, height = 10)
-rel_type_plot
-rel_type_plot_no_mrna
-dev.off()
-```
+   group_by(variable) %>% 
+  mutate(rel_numbers = calc_relative(value))
 
+rel_type_plot <- ggplot(c_type, aes(x=fct_reorder(variable,time), y=rel_numbers, fill = fct_reorder(Type,rel_numbers, .desc = T))) +
+  geom_bar(stat = "identity") + scale_fill_carto_d(palette = discrete_pal_choice) +
+  labs(x = "", y = "Proportion of genes", fill = "Gene type") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) +
+  facet_wrap(~strain, scales = "free", labeller = label_parsed)
+rel_type_plot_no_mrna <- ggplot(c_type_no_mrna, 
+                                aes(x=fct_reorder(variable,time), y=rel_numbers, fill = fct_reorder(Type,rel_numbers, .desc = T))) +
+  geom_bar(stat = "identity") + scale_fill_carto_d(palette = discrete_pal_choice) +
+  labs(x = "", y = "Proportion of genes", fill = "Gene type") +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0.75, hjust = 0.6)) +
+  facet_wrap(~strain, scales = "free", labeller = label_parsed)
+#pdf(file = here::here(str_c(res_path,"mapping stats by gene type.pdf")), width = 8, height = 5)
+rel_type_plot 
+rel_type_plot_no_mrna
+#dev.off()
+```
 Apply EDAseq normalization to the data
 
 ```{r edaseq}
-#Use EDAseq to normalize the libraries
-library(S4Vectors)
-library(EDASeq)
 c_mat <- counts_simple %>% 
                      dplyr::select(-1) %>% 
                      dplyr::slice(-1:-4) %>% 
@@ -184,7 +193,6 @@ pData <- data.frame(genotype=vector(mode = "logical", length = ncol(c_mat)),
 pData <- pData %>% 
   mutate(genotype = case_when(
     str_detect(samples, "WT") ~ "WT",
-    str_detect(samples, "UIN") ~ "WT",
     str_detect(samples, "N") ~ "N"
   ), timepoint = "9") %>% 
   dplyr::select(-samples)
@@ -194,10 +202,10 @@ data <- newSeqExpressionSet(counts=c_mat,
 #Normalize the data next
 dataNorm <- betweenLaneNormalization(data, which="full") 
 #Plot the counts 
-pdf(here::here("final EPEC figures/Normalization effect on the library.pdf"), width = 12, height = 10)
+#pdf(here::here(str_c(res_path,"Normalization effect on the library.pdf")), width = 8, height = 6.3)
 boxplot(data, main = "Unnormalized counts", col = "dodgerblue3")
 boxplot(dataNorm, main = "Normalized counts", col = "dodgerblue3")
-dev.off()
+#dev.off()
 #For DE we will create this analysis with offset values
 dataOffset <- betweenLaneNormalization(data,
                                        which="full",offset=TRUE)
