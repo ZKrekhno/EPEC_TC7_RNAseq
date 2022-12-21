@@ -617,6 +617,7 @@ pheatmap(mat, annotation_col=df,
          show_rownames = T, show_colnames = F, border_color = NA, fontsize_row = 3.5,
          color = color_scheme)
 ```
+
 ```{r heatmap-save, eval=FALSE}
 pheatmap(mat, annotation_col=df, 
          annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
@@ -632,6 +633,84 @@ pheatmap(mat, annotation_col=df,
          filename = here::here(str_c(res_path,"top 100 DE genes WT180.png")))
 ```
 
+Next, make a heatmap of virulence genes (LEE) and plotCounts of map and other mitochondrial genes
+Take LEE annotation from [Antonio's paper](https://www.sciencedirect.com/science/article/pii/S1369527420300011?via=ihub#fig0005)
+
+```{r lee-annot, fig.width=8, fig.height=6}
+#Select only LEE and T2SS genes
+
+top_genes <- time_res_annot %>% 
+  mutate(vir_island = case_when(
+    true_name %in% c("ler","escE","cesA", "cesB","escK","escL","escR","escS","escT","escU") ~ "LEE1",
+    true_name %in% c("cesD","escC","sepD","escJ","escI","espZ") ~ "LEE2",
+    true_name %in% c("cesL","escV","escN","escO","escP","escQ","espH") ~ "LEE3",
+    true_name %in% c("tir","cesT","eaeA") ~ "LEE5",
+    true_name %in% c("sepL","espA","espD","espB","cesD2","escF","escG","espF") ~ "LEE4",
+    str_detect(true_name,"gsp[:Alpha:]+") ~ "T2SS")) %>% 
+  filter(!is.na(vir_island)) %>% 
+  group_by(vir_island) %>% 
+  arrange(desc(abs(log2FoldChange.180)), .by_group = T) 
+heat_mat_lee <- heat_mat [top_genes$geneid,]
+
+rownames(heat_mat_lee) <- top_genes$true_name
+mat_lee <- heat_mat_lee - rowMeans(heat_mat_lee)
+#Set the breaks to be able to center the heatmap colors around 0
+mycolors <- rcartocolor::carto_pal(name = diverg_pal_choice)
+pal_length <- 255
+mybreaks <-  c(seq(min(mat), 0, length.out=ceiling(pal_length/2) + 1), 
+                    seq(max(mat)/pal_length, max(mat), length.out=floor(pal_length/2)))
+color_scheme <- colorRampPalette(mycolors) (pal_length)
+
+
+pheatmap(mat_lee, annotation_col=df, 
+         annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1]),
+                                  "Timepoint" = c("Prior to infection" = carto_pal(4,cont_pal_choice) [1],
+                                                  "45 min" = carto_pal(4,cont_pal_choice) [2],
+                                                  "90 min" = carto_pal(4,cont_pal_choice) [3],
+                                                  "180 min" = carto_pal(4,cont_pal_choice) [4])),
+         fontsize = 10, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks, cluster_rows = F,
+         show_rownames = T, show_colnames = F, border_color = NA, fontsize_row = 8,
+         color = color_scheme)
+```
+```{r lee-heatmap-save, eval=FALSE}
+pheatmap(mat_lee, annotation_col=df, 
+         annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1]),
+                                  "Timepoint" = c("Prior to infection" = carto_pal(4,cont_pal_choice) [1],
+                                                  "45 min" = carto_pal(4,cont_pal_choice) [2],
+                                                  "90 min" = carto_pal(4,cont_pal_choice) [3],
+                                                  "180 min" = carto_pal(4,cont_pal_choice) [4])),
+         fontsize = 10, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks, cluster_rows = F,
+         show_rownames = T, show_colnames = F, border_color = NA, fontsize_row = 8,
+         color = color_scheme,
+          width = 8, height = 6, 
+         filename = here::here(str_c(res_path,"heatmap virulence genes.png")))
+```
+
+Finally, plot counts for mitochondrial-related effectors over time
+
+```{r mito-counts, fig.width=7, fig.height=5}
+mito_ids <- time_res_annot %>% 
+  filter(true_name %in% c("E2348C_3942","espH","espF","espZ")) %>% 
+  mutate(true_name = str_replace(true_name,"E2348C_3942","map"))
+mito_counts <- set_names(mito_ids$geneid, mito_ids$true_name) %>% 
+  map(~plotCounts(dds, gene = .x, returnData = T, intgroup = "timepoint")) %>% 
+  map2(mito_ids$true_name, ~mutate(.x, true_name = .y)) %>% 
+  map(rownames_to_column,var = "sample") %>% 
+  reduce(bind_rows) %>% 
+  left_join(as_tibble(pData, rownames = "sample")) %>% 
+  mutate(genotype = fct_recode(genotype, "Wild-Type EPEC" = "WT", "T3SS Mutant" = "N"))
+
+ggplot(mito_counts, aes(x=timepoint,y=count, color = true_name)) +
+  geom_line(stat = "summary", fun = "mean", linewidth = 1) +
+  stat_summary(geom = "pointrange", fun.data = "mean_se",size = 0.7) + 
+  scale_x_continuous(breaks = c(0,45,90,180)) +
+  scale_color_carto_d(palette = discrete_pal_choice, name = "Mitochondrial\neffector") +
+  labs(x = "Timepoint (min)", y = "Normalized Counts") +
+  facet_wrap(~genotype, ncol = 2, scales = "free_y")
+#ggsave(here::here(str_c(res_path,"Mitochondrial effector counts over time.png")), width = 7, height = 5, dpi = 1080)
+```
 
 
 
