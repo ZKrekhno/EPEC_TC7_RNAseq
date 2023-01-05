@@ -379,6 +379,7 @@ pheatmap(mat, annotation_col=df,
          show_rownames = F, show_colnames = F, border_color = NA,
          color = color_scheme)
 ```
+
 ```{r pheatmap-save, eval=FALSE}
 pheatmap(mat, annotation_col=df, 
          annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
@@ -448,6 +449,7 @@ geneids_smbl <- mapIds(org.Hs.eg.db, keys = rownames(cnt_obj_filt), keytype = "E
   unlist() 
 geneids_smbl <- data.frame(entrezid = names(geneids_smbl), symbol = unname(geneids_smbl))
 ```
+
 ```{r eggsea, eval=FALSE, fig.width=8, fig.height=6}
 #Move onto EGSEA analysis
 #Build gene set collection
@@ -537,10 +539,11 @@ res_n_list_lfc <- res_n_list %>%
 #Combine all shrunken results, and pull out DE genes
 res_all_lfc_list <- list(WT45 = res45lfc, WT90 = res90lfc, WT180 = res180lfc) %>% 
   append(res_n_list_lfc) %>% 
-  map(as_tibble,rownames = "gene_id") %>% 
+  map(as_tibble,rownames = "gene_id")
+res_select_lfc_list <- res_all_lfc_list %>% 
   map(dplyr::filter, padj < 0.05, abs(log2FoldChange)>0.5) %>% 
   map(arrange,padj) 
-res_all_lfc_names <- res_all_lfc_list %>% 
+res_all_lfc_names <- res_select_lfc_list %>% 
   map(pull, gene_id)
 res_all_lfc_entrez <- res_all_lfc_names %>% 
   map(~mapIds(org.Hs.eg.db, keys = str_replace(.x, "\\.[1-9]([0-9])?", ""), keytype = "ENSEMBL", column = "ENTREZID", multiVals = "first")) %>% 
@@ -609,8 +612,6 @@ walk2(biol_pw_df_list, c(11,11,9),
                     axis.text = element_text(color = "black"))))
 #dev.off()
 ```
-
-
 ```{r euler-de, eval=FALSE}
 all_de_genes_euler <- euler(res_all_lfc_names, shape = "ellipse")
 #pdf(here::here(str_c(res_path,"overlap of de genes.pdf")), width = 8, height = 6)
