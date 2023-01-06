@@ -1,0 +1,86 @@
+---
+title: "Prepare input for TimeNexus and String"
+output: 
+  html_notebook: 
+    fig_width: 6
+    fig_height: 5
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r results='hide', message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(include = TRUE)
+knitr::opts_chunk$set(fig.width = 6)
+knitr::opts_chunk$set(fig.height = 5)
+library(tidyverse)
+library(ggprism)
+library(rcartocolor)
+```
+
+Define all helper functions and color choices
+```{r include=TRUE}
+theme_set(theme_prism(base_size = 14))
+#Set color choices from CARTOcolors
+discrete_pal_choice <- "Bold"
+cont_pal_choice <- "BluYl"
+diverg_pal_choice <- "Geyser"
+#Helper functions
+calc_relative <- function(x) x/sum(x) * 100
+#Set up paths for data, and results
+data_path <- "short_infection_human_reads/data/"
+res_path <- "short_infection_human_reads/results/final clean figures/"
+```
+
+Import results for the comparisons to run STRING analysis on 
+
+```{r import}
+res <- read_csv(here::here(str_c(res_path,"tables/EDAseq_normalized results comparing by time WT infection.csv")))
+#Sub-divide the results based on time, and then filter to only include significant hits'
+res_list <- set_names(c("45","90","180"),c("min45","min90","min180")) %>% 
+  map(~select(res, geneid, contains(.x))) %>% 
+  map(~rename_with(.x, ~str_remove(.x, "\\.[:digit:]+"))) 
+res_filt_list <- res_list %>% 
+  map(filter, abs(log2FoldChange) >= 0.5, padj < 0.05) %>% 
+  map(mutate, ensembl = str_remove(geneid, "\\.[1-9]([0-9])?")) %>% 
+  map(as.data.frame)
+#Run the STRING analysis at default settings online
+res_filt_list [[1]]$geneid %>% str_replace( "\\.[1-9]([0-9])?", "") %>%  writeClipboard()
+res_filt_list [[2]]$geneid %>% str_replace( "\\.[1-9]([0-9])?", "") %>%  writeClipboard()
+res_filt_list [[3]]$geneid %>% str_replace( "\\.[1-9]([0-9])?", "") %>%  writeClipboard()
+```
+
+The analyses were run, now prepare the tables for TimeNexus
+
+```{r import-string-res}
+string_res <- c("WT45","WT90","WT180") %>% 
+  map(~read_tsv(here::here(str_c(res_path,"tables/string_interactions_short_",.x,".tsv"))))
+#Convert this into appropriate node tables for timenexus
+node_table <- string_res %>% 
+  map(~data.frame(Node = unique(c(.x$`#node1`,.x$node2)))) %>% 
+  map(mutate, Query = "True") %>%  
+  reduce(full_join, by = "Node") %>% 
+  rename(Query_1 = Query.x, Query_2 = Query.y, Query_3 = Query)
+#write_tsv(node_table, here::here(str_c(res_path,"tables/timenexus/node_table.tsv")))
+#Create the intra-layer edge tables
+intra_layer_tbls <- string_res %>% 
+  map(rename, source = `#node1`, target = node2, score = combined_score)
+#walk2(intra_layer_tbls, c("WT45","WT90","WT180"),
+ #     ~write_tsv(.x, here::here(str_c(res_path,"tables/timenexus/intra_layer_",.y,".tsv"))))
+#Create inter-layer table
+inter_layer_tbl <- node_table %>% 
+  select(source = Node) %>% 
+  mutate(target = source)
+#write_tsv(inter_layer_tbl, here::here(str_c(res_path,"tables/timenexus/inter_layer_table.tsv")))
+```
+
+
+
+
+
+
+
+
+
+
+
