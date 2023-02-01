@@ -215,81 +215,10 @@ plot(eulerplot, quantities = list(T, type = c("counts", "percent"), fontsize = 1
 #dev.off()
 ```
 
-From this it is not clear that RUVs is very helpful in with this library prep. Keep it just to EDAseq normalization. Just do final confirmation that there is not much change in association between PC components and metadata
+From this it is not clear that RUVs is very helpful in with this library prep. Keep it just to EDAseq normalization. 
 ```{r linear_regression_pca, fig.width=8, fig.height=6}
 p_list <- set_names(list(rld,rld1.nobatch,rld2.nobatch), nm = c("No RUV", "RUVs k=1", "RUVs k=2")) %>% 
   map(~pca(assay(.x), colData(.x), removeVar = 0.1))
-pca_coord_meta_list <- p_list %>% 
-  map(~.x$rotated) %>% 
-  map2(list(rld,rld1.nobatch,rld2.nobatch), ~merge(.x,as.data.frame(colData(.y)), by = 0)) %>% 
-  map(mutate, 
-      group = fct_relevel(group, "WT0"),
-      timepoint = as.numeric(timepoint),
-      genotype = fct_relevel(genotype, "N"),)
-#Create the lists to store information on the linear model performance
-fit_list <- p_list
-signi_list <- p_list
-#Run the linear model for each PC - only first 9
-for (i in seq_along(pca_coord_meta_list)) {
-  pca_coord_meta_df <- pca_coord_meta_list [[i]]
-  #Create a fit for each PC
-  fit_list [[i]] <- set_names(vector(mode = "list", length = 9),
-                              nm = str_c("PC",1:9))
-  signi_list [[i]] <- set_names(vector(mode = "list", length = 9),
-                                nm = str_c("PC",1:9))
-  for (PC in seq_along(fit_list [[i]])) {
-    fit_list [[i]] [[PC]] <- set_names(vector(mode = "list", length = 3),
-                              nm = c("group", "timepoint", "genotype"))
-    signi_list [[i]] [[PC]] <- set_names(vector(mode = "list", length = 3),
-                              nm = c("group", "timepoint", "genotype"))
-    for (metavar in c("group", "timepoint", "genotype")) {
-      frm <- as.formula(str_c("PC",PC, " ~ ", metavar))
-      fit_list [[i]] [[PC]] [[metavar]] <- lm(frm, data = pca_coord_meta_df)
-      sum_of_fit <- summary(fit_list [[i]] [[PC]] [[metavar]])
-      signi_list [[i]] [[PC]] [[metavar]] <- sum_of_fit$coefficients %>% 
-        as.data.frame() %>% 
-        mutate(R_squared = sum_of_fit$r.squared,
-               PC = str_c("PC",PC),
-               metavar = metavar) %>% 
-        rownames_to_column(var = "coef")
-    }
-  }
-}
-#Summarise liner model performance and plot the results
-signi_list_reduced <- signi_list %>% 
-  map_depth(2,reduce,bind_rows) %>% 
-  map_depth(1, reduce,bind_rows) %>% 
-  map2(names(signi_list), ~mutate(.x, RUV = .y)) %>% 
-  purrr::reduce(bind_rows) %>% 
-  filter(coef != "(Intercept)") %>% 
-  dplyr::rename(p = `Pr(>|t|)`) %>%  
-  mutate(signi = case_when(
-    p < 0.05 ~ "yes",
-    TRUE ~ "no"
-  ))
-#Plot the results of regression
-ggplot(signi_list_reduced) +
-  geom_tile(aes(y=coef,x=PC, fill = p)) +
-  geom_text(data = filter(signi_list_reduced, signi == "yes"), aes(y=coef,x=PC), 
-            label = "*", color = "white", size = 7, nudge_y = -0.02) +
-  facet_wrap(~RUV, nrow = 3, scales = "free") +
-  labs(x = element_blank(), y = element_blank(), title = "Linear regression analysis\nidentifying relationships between metadata and PC") +
-  scale_y_discrete(labels = c(timepoint = "Time of Infection",
-                              genotypeWT = "Effect of T3SS",
-                              groupWT90 = "Effect of WT EPEC at 90 min",
-                              groupWT180 = "Effect of WT EPEC at 180 min",
-                              groupN90 = bquote("Effect of" ~ Delta*"EscN EPEC at 90 min"),
-                              groupN180 = bquote("Effect of" ~ Delta*"EscN EPEC at 180 min"))) +
-  scale_fill_carto_c(palette = "BluYl", direction = -1, name = "p-value") +
-  theme_minimal(base_size = 16) +
-  theme(panel.border = element_rect(fill = NA, color = "black"),
-        axis.ticks.x = element_line(color = "black"),
-        axis.ticks.y = element_line(color = "black"),
-        panel.grid.major = element_blank(),
-        axis.text = element_text(color = "black"),
-        title = element_text(size = 12),
-        legend.title = element_text(size = 19))
-#ggsave(here::here(str_c(res_path,"final RUV figures/Linear regression of metadata and PCA with respect to RUV.png")), width = 8,height = 6, dpi = 1080)
 #Shifting correlations from PC2 to PC1 does not change much, as PC1 and PC2 explain about similar amounts of variation
 #pdf(here::here(str_c(res_path,"final RUV figures/screeplots for each RUV approach.pdf")), width = 6, height = 5)
 walk2(p_list, names(p_list),
