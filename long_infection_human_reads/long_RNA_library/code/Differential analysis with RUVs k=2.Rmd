@@ -395,9 +395,18 @@ Create a heatmap of top differentially expressed genes
 ```{r heatmap, fig.width=8, fig.height=6}
 heat_mat <- assay(rld2.nobatch)
 rownames(heat_mat) <- geneids$gene_name
-topVarGenes <- head(order(-rowVars(heat_mat)),20)
+#Remove lncRNA from this heatmap
+mRNA_index <- str_which(rownames(heat_mat), "(ENSG)|(MIR)|(-AS)", negate = T)
+heat_mat <- heat_mat [mRNA_index,]
+topVarGenes <- head(order(-rowVars(heat_mat)),100)
 mat <- heat_mat [ topVarGenes, ]
 mat <- mat - rowMeans(mat)
+#Set the breaks to be able to center the heatmap colors around 0
+mycolors <- rcartocolor::carto_pal(name = diverg_pal_choice)
+pal_length <- 255
+mybreaks <-  c(seq(min(mat), 0, length.out=ceiling(pal_length/2) + 1), 
+                    seq(max(mat)/pal_length, max(mat), length.out=floor(pal_length/2)))
+color_scheme <- colorRampPalette(mycolors) (pal_length)
 #For some reason fct_recode did not want to work the delta sign, so had to work around it
 df <- as.data.frame(colData(rld)) %>% 
   dplyr::select(genotype) %>% 
@@ -407,8 +416,9 @@ pheatmap(mat, annotation_col=df,
          annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
                                                          "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
                                                          "Uninfected" = carto_pal(12,discrete_pal_choice) [10])),
-         fontsize = 14, treeheight_row = 0, treeheight_col = 10,
-         color = colorRampPalette(carto_pal(7,diverg_pal_choice)) (100))
+         fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
+         show_rownames = F, show_colnames = F, border_color = NA,
+         color = color_scheme)
 ```
 
 
@@ -417,9 +427,10 @@ pheatmap(mat, annotation_col=df,
          annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
                                                          "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
                                                          "Uninfected" = carto_pal(12,discrete_pal_choice) [10])),
-         fontsize = 14, treeheight_row = 0, treeheight_col = 10,
-         color = colorRampPalette(carto_pal(7,diverg_pal_choice)) (100), 
-         filename = here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/top 20 DE heatmap.png"),
+         fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
+         show_rownames = F, show_colnames = F, border_color = NA,
+         color = color_scheme,
+         filename = here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/top 100 DE heatmap.png"),
          width = 8, height = 6)
 ```
 
