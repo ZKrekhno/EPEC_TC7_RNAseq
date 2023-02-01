@@ -15,6 +15,7 @@ library(biomaRt)
 library(limma)
 library(greekLetters)
 library(RUVSeq)
+library(PCAtools)
 library(EDASeq)
 library(DESeq2)
 library(ggprism)
@@ -236,7 +237,7 @@ cnts <- assay(rld)
 rownames(cnts) <- rownames(cnts) %>% str_replace_all("hsa-","")
 p <- pca(cnts,colData(dds), removeVar = 0.1)
 pca_coord_meta <- p$rotated %>% 
-  merge(as.data.frame(colData(rld2.nobatch)), by = 0) %>% 
+  merge(as.data.frame(colData(rld)), by = 0) %>% 
   mutate(group = fct_relevel(group, "WT9"))
 #Create the lists to store information on the linear model performance
 fit_list <- set_names(vector(mode = "list", length = 9),
@@ -323,7 +324,7 @@ volcano_ggplot <- function(res_df, title = "", to_label = F, n_lab = 10) {
     geom_hline(yintercept = -log10(0.05), lty = 2, lwd = 0.8, color = "grey30") +
     geom_vline(xintercept = -0.5, lty = 2, lwd = 0.8, color = "grey30") +
     geom_vline(xintercept = 0.5, lty = 2, lwd = 0.8, color = "grey30") +
-    geom_point(size = 4, shape = 21, alpha = 0.7) +
+    geom_point(size = 5, shape = 21, alpha = 0.7) +
     scale_color_manual(values = c("darkgrey", carto_pal(7,diverg_pal_choice) [7])) +
     scale_fill_manual(values = c("darkgrey", carto_pal(7,diverg_pal_choice) [7])) +
     guides(color = 'none', fill = 'none') +
@@ -337,7 +338,8 @@ volcano_ggplot <- function(res_df, title = "", to_label = F, n_lab = 10) {
     res_df_top <- res_df %>% 
       filter(signi == "yes") %>% 
       arrange(desc(abs(log2FoldChange))) %>% 
-      slice_head(n=n_lab)
+      slice_head(n=n_lab) %>% 
+      separate(gene, into = c("gene","origin_miRNA"), sep = "_")
     p_labelled <- p_empty + 
       geom_label_repel(data = res_df_top, aes(x = log2FoldChange, y = -log10(padj), label = gene),
                        size = 4, max.overlaps = Inf, color = "black", fill = "white")
@@ -358,10 +360,18 @@ volcano_list_labelled <- map2(res_df_list,
                           "WT infection vs Uninfected cells",
                           bquote(Delta*"EscN infection vs Uninfected cells")),
                      volcano_ggplot, to_label = T, n_lab = 10)
+```
+
+
+```{r volcano-print, fig.width=8, fig.height=6}
 #pdf(here::here("long_infection_human_reads/miRNA_library/results/final clean figures/Volcano plots.pdf"), width = 8, height = 6)
 walk(volcano_list, print)
 walk(volcano_list_labelled, print)
 #dev.off()
+#Print labelled plots into pngs
+#walk2(volcano_list_labelled, c("WTvsN","WTvsUI","NvsUI"),
+ #     ~ggsave(here::here(str_c("long_infection_human_reads/miRNA_library/results/final clean figures/Volcano plots ", .y,".png")), 
+  #            plot = .x, width = 8, height = 6, dpi = 1080))
 
 
 
