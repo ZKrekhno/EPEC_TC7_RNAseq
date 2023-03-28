@@ -507,7 +507,7 @@ For GSEA, use all genes, not just DE - https://hbctraining.github.io/Training-mo
 #library(pathview)
 #If KEGG is giving troubles with clusterprofiler run this, can switch to wget instead of auto:
 library(R.utils)
-R.utils::setOption("clusterProfiler.download.method","wget")
+R.utils::setOption("clusterProfiler.download.method","auto")
 
 #Prep a list of each gene lists
 gl_all_df_list <- list(res45lfc,res90lfc,res180lfc, res45vsn,res90vsn, res180vsn) %>% 

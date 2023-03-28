@@ -1,0 +1,68 @@
+---
+title: "Making dotplots for EPEC"
+output: 
+  html_notebook:
+    fig_width: 6
+    fig_height: 5
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r lib-setup, results='hide', message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(include = TRUE)
+knitr::opts_chunk$set(fig.width = 6)
+knitr::opts_chunk$set(fig.height = 5)
+library(tidyverse)
+library(ggprism)
+library(rcartocolor)
+library(patchwork)
+```
+
+Define all helper functions and color choices
+```{r helper, include=TRUE}
+theme_set(theme_bw(base_size = 17) + theme(legend.title = element_text()))
+#Set color choices from CARTOcolors
+discrete_pal_choice <- "Bold"
+cont_pal_choice <- "BluYl"
+diverg_pal_choice <- "Geyser"
+#Set color vectors
+cont_colors <- carto_pal(name = cont_pal_choice)
+chosen_cont_colors <- cont_colors [c(2,4,6,7)]
+#Helper functions
+calc_relative <- function(x) x/sum(x) * 100
+#Set up paths for data, and results
+data_path <- "short_infection_EPEC_reads/data/"
+res_path <- "short_infection_EPEC_reads/results/"
+```
+Read in results
+```{r import, fig.width=7, fig.height=5}
+gse_dfs_names <- list.files(path = here::here(str_c(res_path,"tables/")), pattern = "GSEA")
+#Read in the dfs
+gse_dfs <- gse_dfs_names %>% 
+  set_names(.,nm = .) %>% 
+  map(~read_csv(file = here::here(str_c(res_path, "tables/",.x)))) 
+#Get gene counts
+gse_counts <- gse_dfs %>% 
+  map(separate_rows,core_enrichment, sep = "/") %>% 
+  map(summarise, Count = n(), .by = c("NES","Description","p.adjust")) %>% 
+  map(mutate, Description = str_wrap(Description, width = 25))
+
+#Plot the results
+#pdf(here::here(str_c(res_path,"Functional profiling dotplots better colors.pdf")), width = 7, height = 5)
+gse_counts %>% 
+  iwalk(~print(ggplot(.x, aes(x = NES, y = fct_reorder(Description,NES), 
+                              color = p.adjust, size = Count)) +
+                 geom_point() + 
+                 scale_color_gradient(low  = chosen_cont_colors [4], high = chosen_cont_colors [1]) +
+                 scale_size(range = c(5,10)) +
+                 labs(y = element_blank(), caption = .y) +
+                 coord_cartesian(clip = "off", xlim = c(min(.x$NES)-0.2, max(.x$NES)+0.1)) + 
+                 theme(axis.text.x = element_text(color = "black"),
+                       axis.text.y = element_text(color = "black")) 
+  ))
+#dev.off()
+
+```
+
