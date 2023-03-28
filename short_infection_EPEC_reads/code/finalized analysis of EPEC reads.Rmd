@@ -39,6 +39,9 @@ theme_set(theme_prism(base_size = 14) + theme(legend.title = element_text()))
 discrete_pal_choice <- "Bold"
 cont_pal_choice <- "BluYl"
 diverg_pal_choice <- "Geyser"
+#Set color vectors
+cont_colors <- carto_pal(name = cont_pal_choice)
+chosen_cont_colors <- cont_colors [c(2,4,6,7)]
 #Helper functions
 calc_relative <- function(x) x/sum(x) * 100
 #Set up paths for data, and results
@@ -249,10 +252,11 @@ normal_PCA <- plotPCA(rld, returnData = T, intgroup = "group") %>%
   mutate(genotype = fct_relevel(genotype, "WT", "N"))
   
 #Plot the PCA graphs of the normalized counts
-#png(here::here(str_c(res_path,"PCA plot of normalized counts.png")), width = 8, height = 6, units = "in", res = 1080)
+png(here::here(str_c(res_path,"PCA plot of normalized counts.png")), width = 7, height = 5, units = "in", res = 1080)
 ggplot(data = normal_PCA, aes(shape = genotype)) +
-  scale_color_carto_c(palette = cont_pal_choice, breaks = c(0,45,90,180)) +
-  geom_point(mapping = aes(x = PC1, y = PC2, color = timepoint), size = 5) +
+   scale_color_manual(values = chosen_cont_colors,breaks = c(0,45,90,180)) +
+  #scale_color_carto_c(palette = cont_pal_choice, breaks = c(0,45,90,180)) +
+  geom_point(mapping = aes(x = PC1, y = PC2, color = factor(timepoint)), size = 5) +
   labs(title = "EDAseq normalized DESeq2 PCA plot \nnot including the outlier",
        x = "PC1: 40% variance",
        y = "PC2: 14% variance") +
@@ -261,7 +265,7 @@ ggplot(data = normal_PCA, aes(shape = genotype)) +
   scale_shape_manual(labels = c("WT" = "Wild-type EPEC",
                                 "N" = paste0(greeks("Delta"),"EscN EPEC")),
                      values = c("Uninfected" = 15, "WT" = 16, "N" = 17))
-#dev.off()
+dev.off()
 ```
 Identify differentially expressed genes
 ```{r deseq-res}
@@ -502,8 +506,8 @@ For GSEA, use all genes, not just DE - https://hbctraining.github.io/Training-mo
 ```{r clusterprofiler}
 #library(pathview)
 #If KEGG is giving troubles with clusterprofiler run this, can switch to wget instead of auto:
-#library(R.utils)
-R.utils::setOption("clusterProfiler.download.method","auto")
+library(R.utils)
+R.utils::setOption("clusterProfiler.download.method","wget")
 
 #Prep a list of each gene lists
 gl_all_df_list <- list(res45lfc,res90lfc,res180lfc, res45vsn,res90vsn, res180vsn) %>% 
@@ -619,12 +623,12 @@ df <- as.data.frame(colData(rld)) %>%
 pheatmap(mat, annotation_col=df, 
          annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
                                                          "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1]),
-                                  "Timepoint" = c("Prior to infection" = carto_pal(4,cont_pal_choice) [1],
-                                                  "45 min" = carto_pal(4,cont_pal_choice) [2],
-                                                  "90 min" = carto_pal(4,cont_pal_choice) [3],
-                                                  "180 min" = carto_pal(4,cont_pal_choice) [4])),
+                                  "Timepoint" = c("Prior to infection" = chosen_cont_colors [1],
+                                                  "45 min" = chosen_cont_colors [2],
+                                                  "90 min" = chosen_cont_colors [3],
+                                                  "180 min" = chosen_cont_colors [4])),
          fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
-         show_rownames = T, show_colnames = F, border_color = NA, fontsize_row = 3.5,
+         show_rownames = F, show_colnames = F, border_color = NA, fontsize_row = 3.5,
          color = color_scheme)
 ```
 
@@ -632,12 +636,12 @@ pheatmap(mat, annotation_col=df,
 pheatmap(mat, annotation_col=df, 
          annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
                                                          "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1]),
-                                  "Timepoint" = c("Prior to infection" = carto_pal(4,cont_pal_choice) [1],
-                                                  "45 min" = carto_pal(4,cont_pal_choice) [2],
-                                                  "90 min" = carto_pal(4,cont_pal_choice) [3],
-                                                  "180 min" = carto_pal(4,cont_pal_choice) [4])),
+                                  "Timepoint" = c("Prior to infection" = chosen_cont_colors [1],
+                                                  "45 min" = chosen_cont_colors [2],
+                                                  "90 min" = chosen_cont_colors [3],
+                                                  "180 min" = chosen_cont_colors [4])),
          fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
-         show_rownames = T, show_colnames = F, border_color = NA, fontsize_row = 3.5,
+         show_rownames = F, show_colnames = F, border_color = NA, fontsize_row = 3.5,
          color = color_scheme,
          width = 8, height = 6, 
          filename = here::here(str_c(res_path,"top 100 DE genes WT180.png")))
