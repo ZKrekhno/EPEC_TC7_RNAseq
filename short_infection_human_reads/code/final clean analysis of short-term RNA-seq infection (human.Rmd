@@ -31,12 +31,15 @@ library(rcartocolor)
 ```
 
 Define all helper functions and color choices
-```{r include=TRUE}
+```{r helper, include=TRUE}
 theme_set(theme_prism(base_size = 14))
 #Set color choices from CARTOcolors
 discrete_pal_choice <- "Bold"
 cont_pal_choice <- "BluYl"
 diverg_pal_choice <- "Geyser"
+#Set color vectors
+cont_colors <- carto_pal(name = cont_pal_choice)
+chosen_cont_colors <- cont_colors [c(2,4,6,7)]
 #Helper functions
 calc_relative <- function(x) x/sum(x) * 100
 #Set up paths for data, and results
@@ -162,7 +165,7 @@ dataOffset <- betweenLaneNormalization(data,
                                        which="upper",offset=TRUE)
 ```
 Next step is to use normalized counts in the DESEq2 analysis of differential expression
-```{r deseq, fig.width=8, fig.height=6}
+```{r deseq, fig.width=7, fig.height=5}
 #Prepare the DESEq2 object and apply EDASeq normalization factors
 pData$group <- factor(paste0(pData$genotype,pData$timepoint))
 pData <- pData %>% 
@@ -188,10 +191,11 @@ normal_PCA <- plotPCA(rld, returnData = T, intgroup = "group") %>%
   mutate(genotype = fct_relevel(genotype, "Uninfected", "WT", "N"))
   
 #Plot the PCA graphs of the normalized counts
-#png(here::here(str_c(res_path,"PCA plot of normalized counts.png")), width = 8, height = 6, units = "in", res = 1080)
+#png(here::here(str_c(res_path,"PCA plot of normalized counts.png")), width = 7, height = 5, units = "in", res = 1080)
 ggplot(data = normal_PCA, aes(shape = genotype)) +
-  scale_color_carto_c(palette = cont_pal_choice, breaks = c(0,45,90,180)) +
-  geom_point(mapping = aes(x = PC1, y = PC2, color = timepoint), size = 5) +
+  scale_color_manual(values = chosen_cont_colors,breaks = c(0,45,90,180)) +
+  #scale_color_carto_c(palette = cont_pal_choice, breaks = c(0,45,90,180)) +
+  geom_point(mapping = aes(x = PC1, y = PC2, color = factor(timepoint)), size = 5) +
   labs(title = "EDAseq normalized DESeq2 PCA plot \nnot including the outlier",
        x = "PC1: 39% variance",
        y = "PC2: 21% variance") +
@@ -371,10 +375,10 @@ pheatmap(mat, annotation_col=df,
          annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
                                                          "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
                                                          "Uninfected" = carto_pal(12,discrete_pal_choice) [10]),
-                                  "Timepoint" = c("Uninfected" = carto_pal(4,cont_pal_choice) [1],
-                                                  "45 min" = carto_pal(4,cont_pal_choice) [2],
-                                                  "90 min" = carto_pal(4,cont_pal_choice) [3],
-                                                  "180 min" = carto_pal(4,cont_pal_choice) [4])),
+                                  "Timepoint" = c("Uninfected" = chosen_cont_colors [1],
+                                                  "45 min" = chosen_cont_colors [2],
+                                                  "90 min" = chosen_cont_colors [3],
+                                                  "180 min" = chosen_cont_colors [4])),
          fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
          show_rownames = F, show_colnames = F, border_color = NA,
          color = color_scheme)
@@ -385,10 +389,10 @@ pheatmap(mat, annotation_col=df,
          annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
                                                          "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
                                                          "Uninfected" = carto_pal(12,discrete_pal_choice) [10]),
-                                  "Timepoint" = c("Uninfected" = carto_pal(4,cont_pal_choice) [1],
-                                                  "45 min" = carto_pal(4,cont_pal_choice) [2],
-                                                  "90 min" = carto_pal(4,cont_pal_choice) [3],
-                                                  "180 min" = carto_pal(4,cont_pal_choice) [4])),
+                                  "Timepoint" = c("Uninfected" = chosen_cont_colors [1],
+                                                  "45 min" = chosen_cont_colors [2],
+                                                  "90 min" = chosen_cont_colors [3],
+                                                  "180 min" = chosen_cont_colors [4])),
          fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
          show_rownames = F, show_colnames = F, border_color = NA,
          color = color_scheme, width = 8, height = 6, 
