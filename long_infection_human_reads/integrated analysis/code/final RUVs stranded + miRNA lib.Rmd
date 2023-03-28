@@ -32,6 +32,9 @@ theme_set(theme_prism(base_size = 14))
 discrete_pal_choice <- "Bold"
 cont_pal_choice <- "BluYl"
 diverg_pal_choice <- "Geyser"
+#Set color vectors
+cont_colors <- carto_pal(name = cont_pal_choice)
+chosen_cont_colors <- cont_colors [c(2,4,6,7)]
 #Helper functions
 calc_relative <- function(x) x/sum(x) * 100
 ```
@@ -249,7 +252,7 @@ top_genes_symbol <- top_genes %>%
     !is.na(hgnc_symbol) ~ hgnc_symbol,
     TRUE ~ symbol
   )) %>% 
-  select(-symbol1,-hgnc_symbol)
+  dplyr::select(-symbol1,-hgnc_symbol)
 #Identify genes with apoptotic annotation
 top_genes_annot <- top_genes_symbol %>% 
   left_join(c5, by = c("symbol" = "gene")) %>% 
@@ -386,7 +389,7 @@ top_genes_expr <- top_genes %>%
 #write.table(top_genes_expr, here::here("long_infection_human_reads/integrated analysis/results/network/attribute table for combined miRNA-RUVs mRNA.txt"), sep = "\t", row.names = F, quote = F)
 ```
 
-```{r cluster-prof-2}
+```{r cluster-prof-2, fig.width=8, fig.height=6}
 top_genes_symbol <- top_genes_expr %>% 
   mutate(symbol1 = case_when(
            biotype == "mirna" ~ str_to_lower(str_remove(geneid,"-.p")),
@@ -397,7 +400,7 @@ top_genes_symbol <- top_genes_expr %>%
     !is.na(hgnc_symbol) ~ hgnc_symbol,
     TRUE ~ symbol
   )) %>% 
-  select(-symbol1,-hgnc_symbol) %>% 
+  dplyr::select(-symbol1,-hgnc_symbol) %>% 
   arrange(-(lfc))
 gl <- set_names(top_genes_symbol$lfc, nm = top_genes_symbol$symbol)
 ora <- vector(mode = "list",length = 3)
@@ -408,8 +411,12 @@ for (i in 1:length(ora)) {
 }
 #pdf(here::here("long_infection_human_reads/integrated analysis/results/clusterprofiler WTvsN combined search ora analysis with defined background list.pdf"), width = 8, height = 6)
 for (i in 1) {
-print(dotplot(ora [[i]], showCategory = 20, font.size = 14) +
-        scale_color_carto_c(palette = cont_pal_choice, direction = -1))
+print(dotplot(ora [[i]], showCategory = 20, font.size = 17) +
+        scale_color_gradient(high = chosen_cont_colors [1], low = chosen_cont_colors [4]) + 
+        scale_size(range = c(7,12)) + 
+        expand_limits(x = c(0.14, 0.21)) + 
+        theme(legend.text = element_text(size = 14),
+              legend.title = element_text(size = 15)))
 print(heatplot(ora [[i]], foldChange=gl) + 
         scale_fill_gradient2(high = carto_pal(7,diverg_pal_choice) [7],
                              low =  carto_pal(7,diverg_pal_choice) [1],
@@ -418,6 +425,7 @@ print(heatplot(ora [[i]], foldChange=gl) +
                              name = bquote(Log[2] ~ "fold change")))
 }
 #dev.off()
+
 ```
 
 
