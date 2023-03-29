@@ -507,11 +507,102 @@ gs.annots.h <-  buildGMTIdx(geneIDs = rownames(cnt_obj_filt), species = "Human",
                             gmt.file = here::here(str_c(data_path,"h.all.v7.5.1.entrez.gmt")))
 
 gsa.h <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_matrix,
-                    contrasts = contrast_obj_Wt, gs.annots = gs.annots.h, symbolsMap = geneids_smbl,
+                    contrasts = contrast_obj_wt, gs.annots = gs.annots.h, symbolsMap = geneids_smbl,
                     baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.05, combineMethod = "wilkinson",
                     num.threads = 4, report = TRUE, 
                     report.dir = here::here(str_c(res_path, "wt comparisons MSIGDB Hallmark")),
                     verbose = T, display.top = 35)
+```
+
+```{r egsea-msigdb-h-all-comparisons, fig.width=8, fig.height=6}
+#Move onto EGSEA analysis with hallmark gene sets
+
+#Build gene set collection
+gs.annots.h <-  buildGMTIdx(geneIDs = rownames(cnt_obj_filt), species = "Human", 
+                            gmt.file = here::here(str_c(data_path,"h.all.v7.5.1.entrez.gmt")))
+
+gsa.h <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_matrix,
+                    contrasts = contrast_obj, gs.annots = gs.annots.h, symbolsMap = geneids_smbl,
+                    baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.05, combineMethod = "wilkinson",
+                    num.threads = 4, report = TRUE, 
+                    report.dir = here::here(str_c(res_path, "all comparisons MSIGDB Hallmark")),
+                    verbose = T, display.top = 35)
+```
+Plot the pathways from the comparison MSigDB
+```{r prep-egsea-msigdb-h, fig.width=8, fig.height=5}
+gsets_h_all_names <- list.files(path = here::here(str_c(res_path, "all comparisons MSIGDB Hallmark/ranked-gene-sets-base/")), pattern = "txt") %>% 
+  str_subset("compare", negate = T)
+#Read in the fies
+gsets_h_list <- gsets_h_all_names %>% 
+  set_names(.,nm = .) %>% 
+  map(~read_tsv(here::here(str_c(res_path, "all comparisons MSIGDB Hallmark/ranked-gene-sets-base/",.x))))
+
+#Rename the list for ease of operation
+gsets_names <- gsets_h_all_names %>% 
+  str_remove("ranked-gmtcustom-gene-sets-") %>% 
+  str_remove("-WT0\\.txt")
+
+#Display pathways with odd number of occurences (so they occur for one strain, but not the other) 
+gsets_unq <- gsets_h_list %>% 
+  set_names(gsets_names) %>%
+  map(~filter(.x, p.adj < 0.05)) %>% 
+  imap(~mutate(.x, Comparison = .y)) %>%
+  reduce(bind_rows) %>% 
+  select(GeneSet, Comparison) %>% 
+  mutate(Strain = str_remove(Comparison, "[:digit:]+"),
+         Time = str_remove(Comparison, "[:alpha:]+")) %>% 
+  summarise(n_app = n(), .by = c("GeneSet", "Strain")) %>%  
+  pivot_wider(names_from = "Strain", values_from = "n_app") %>% 
+  mutate(WT = as.numeric(str_replace_na(WT, "0")),
+         N = as.numeric(str_replace_na(N, "0"))) %>% 
+  filter(WT != N)
+#Filter to top n from WT180
+top_n <- gsets_h_list$`ranked-gmtcustom-gene-sets-WT180-WT0.txt` %>% 
+  slice_head(n=15) %>% 
+  pull(var = "GeneSet")
+gsets_h_filt <- gsets_h_list %>% 
+  set_names(gsets_names) %>% 
+  map(~filter(.x,GeneSet %in% gsets_unq$GeneSet)) %>% 
+  map(select, GeneSet, direction, p.adj, Rank, avg.logfc) %>% 
+  imap(~mutate(.x, Comparison = .y)) %>% 
+  reduce(bind_rows) %>% 
+  filter(p.adj < 0.05) %>% 
+  mutate(Strain = str_remove(Comparison, "[:digit:]+"),
+         Strain = fct_relevel(Strain, "WT"),
+         Strain = fct_recode(Strain, 
+                             "Wild-type EPEC" = "WT",
+                             "T3SS-deficient EPEC" = "N"),
+         Time = as.numeric(str_remove(Comparison, "[:alpha:]+")),
+         direction = factor(direction),
+         GeneSet = str_remove(GeneSet, "HALLMARK_"),
+         GeneSet = str_replace_all(GeneSet, "_"," "),
+         GeneSet = str_wrap(GeneSet, width = 25))
+```
+
+
+```{r plot-egsea-msigdb-h, fig.width=8, fig.height=5}
+#Plot the results
+ggplot(gsets_h_filt, aes(x = factor(Time), y = GeneSet)) +
+  geom_tile(aes(fill = direction), color = "black", alpha = 1) + 
+  scale_shape_manual(values = set_names(c(24,25), nm = c("1","-1"))) +
+  theme_bw(base_size = 11) + 
+  theme(legend.title = element_text(face = "bold"),
+        axis.text = element_text(face = "bold"),
+        axis.title = element_text(face = "bold"),
+        panel.grid.major = element_blank(),
+        strip.text = element_text(face = "bold")) + 
+  scale_fill_manual(values = c("-1" = carto_pal(2, diverg_pal_choice) [1],
+                               "1" = carto_pal(2, diverg_pal_choice) [2]),
+                    labels = c("-1" = "Down-regulated","1" = "Up-regulated")) +
+  labs(x = "Time of Infection (min)", y = element_blank(), fill = "Regulation direction") +
+  facet_wrap(~Strain, ncol = 2)
+ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways.png")), width = 8, height = 5, dpi = 1080)
+ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways.svg")), width = 8, height = 5)
+    
+```
+
+
+```{r egsea-msigdb-h-wt-plot, eval=FALSE, fig.width=8, fig.height=6}
 gsets_hall <- read_tsv(here::here(str_c(res_path, "wt comparisons MSIGDB Hallmark/ranked-gene-sets-base/ranked-gmtcustom-gene-sets-WT180-WT0.txt")))
 #png(here::here(str_c(res_path,"egsea WT180vsWT0 top Hallmark pathways.png")), width = 8, height = 6, units = "in", res = 1080)
 ggplot(dplyr::slice(gsets_hall,1:15),
