@@ -577,6 +577,8 @@ gsets_h_filt <- gsets_h_list %>%
          GeneSet = str_remove(GeneSet, "HALLMARK_"),
          GeneSet = str_replace_all(GeneSet, "_"," "),
          GeneSet = str_wrap(GeneSet, width = 25))
+gsets_h_add_missing <- gsets_h_filt %>% 
+  complete(GeneSet, Strain, Time)
 ```
 
 
@@ -596,8 +598,26 @@ ggplot(gsets_h_filt, aes(x = factor(Time), y = GeneSet)) +
                     labels = c("-1" = "Down-regulated","1" = "Up-regulated")) +
   labs(x = "Time of Infection (min)", y = element_blank(), fill = "Regulation direction") +
   facet_wrap(~Strain, ncol = 2)
-ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways.png")), width = 8, height = 5, dpi = 1080)
-ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways.svg")), width = 8, height = 5)
+#ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways.png")), width = 8, height = 5, dpi = 1080)
+#ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways.svg")), width = 8, height = 5)
+
+ggplot(gsets_h_add_missing, aes(x = factor(Time), y = GeneSet)) +
+  geom_tile(aes(fill = direction), color = "black", alpha = 1) + 
+  scale_shape_manual(values = set_names(c(24,25), nm = c("1","-1"))) +
+  theme_bw(base_size = 11) + 
+  theme(legend.title = element_text(face = "bold"),
+        axis.text = element_text(face = "bold"),
+        axis.title = element_text(face = "bold"),
+        panel.grid.major = element_blank(),
+        strip.text = element_text(face = "bold")) + 
+  scale_fill_manual(values = c("-1" = carto_pal(2, diverg_pal_choice) [1],
+                               "1" = carto_pal(2, diverg_pal_choice) [2]),
+                    labels = c("-1" = "Down-regulated","1" = "Up-regulated"),
+                    na.value = "grey80") +
+  labs(x = "Time of Infection (min)", y = element_blank(), fill = "Regulation direction") +
+  facet_wrap(~Strain, ncol = 2)
+#ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways with grey for missing.png")), width = 8, height = 5, dpi = 1080)
+#ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways  with grey for missing.svg")), width = 8, height = 5)
     
 ```
 
