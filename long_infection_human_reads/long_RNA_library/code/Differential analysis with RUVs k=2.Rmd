@@ -571,6 +571,31 @@ walk2(list(gsets.h_wt_n, gsets.h_wt_ui, gsets.h_n_ui), c("WT-N","WT-UI", "N-UI")
 #dev.off()
 ```
 
+Repeat EGSEA analysis with miRNA and TF sets
+```{r egsea-msig-tf, eval=FALSE}
+#Build gene set collection
+gs.annots.tf <-  buildGMTIdx(geneIDs = rownames(cnt_obj_filt), species = "Human", 
+                            gmt.file = here::here("long_infection_human_reads/long_RNA_library/data/c3.tft.v2023.1.Hs.entrez.gmt"))
+
+gsa.tf <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_matrix,
+                    contrasts = contrast_obj, gs.annots = gs.annots.tf, symbolsMap = geneids_smbl,
+                    baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.05, combineMethod = "wilkinson",
+                    num.threads = 4, report = TRUE, 
+                    report.dir = here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/all comparisons MSIGDB TF"),
+                    verbose = T, display.top = 35)
+```
+```{r egsea-msig-mir, eval=FALSE}
+#Build gene set collection
+gs.annots.mir <-  buildGMTIdx(geneIDs = rownames(cnt_obj_filt), species = "Human", 
+                            gmt.file = here::here("long_infection_human_reads/long_RNA_library/data/c3.mir.v2023.1.Hs.entrez.gmt"))
+
+gsa.mir <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_matrix,
+                    contrasts = contrast_obj, gs.annots = gs.annots.mir, symbolsMap = geneids_smbl,
+                    baseGSEAs = egsea.base(), sort.by = "p.adj", fdr.cutoff = 0.05, combineMethod = "wilkinson",
+                    num.threads = 4, report = TRUE, 
+                    report.dir = here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/all comparisons MSIGDB mir"),
+                    verbose = T, display.top = 35)
+```
 
 
 Write all the necessary objects as text tables to combine with miRNA results
