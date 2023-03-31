@@ -333,7 +333,8 @@ volcano_ggplot <- function(res_df, title = "", to_label = F, n_lab = 10) {
          title = title) +
     theme_prism(base_size = 24) +
     theme(title = element_text(size = 10),
-          axis.title = element_text(size = 24))
+          axis.title = element_text(size = 24)) +
+    coord_cartesian(clip = "off")
   if(to_label) {
     res_df_top <- res_df %>% 
       filter(signi == "yes") %>% 
@@ -342,7 +343,7 @@ volcano_ggplot <- function(res_df, title = "", to_label = F, n_lab = 10) {
       separate(gene, into = c("gene","origin_miRNA"), sep = "_")
     p_labelled <- p_empty + 
       geom_label_repel(data = res_df_top, aes(x = log2FoldChange, y = -log10(padj), label = gene),
-                       size = 4, max.overlaps = Inf, color = "black", fill = "white")
+                       size = 6, max.overlaps = Inf, color = "black", fill = "white", force = 100, force_pull = 1)
     return(p_labelled)
   } else {
     return(p_empty)
@@ -368,6 +369,8 @@ volcano_list_labelled <- map2(res_df_list,
 walk(volcano_list, print)
 walk(volcano_list_labelled, print)
 #dev.off()
+#map2(volcano_list_labelled, c("WTvsN","WTvsUI","dNvsUI"), 
+ #    ~ggsave(filename = here::here(str_c("long_infection_human_reads/miRNA_library/results/final clean figures/Volcano plots",.y,".svg")), plot = .x, width = 8, height = 6))
 #Print labelled plots into pngs
 #walk2(volcano_list_labelled, c("WTvsN","WTvsUI","NvsUI"),
  #     ~ggsave(here::here(str_c("long_infection_human_reads/miRNA_library/results/final clean figures/Volcano plots ", .y,".png")), 
