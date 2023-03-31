@@ -294,6 +294,81 @@ time_resvsn_annot <- list(res45vsn,res90vsn,res180vsn) %>%
 #write.table(time_resvsn_annot, here::here(str_c(res_path, "tables/EDAseq_normalized results comparing  WT and EscN infection.csv")),
  #          sep = ",", row.names = F)
 ```
+Interestingly, bfp genes are down-regulated during infection when T3SS is present, let's plot that
+```{r bfp-plot, fig.width=7, fig.height=5}
+#Filter results to bfp and per
+bfp_ids <- time_resvsn_annot %>% 
+  filter(str_detect(true_name, "bfp|per")) 
+bfp_counts <- set_names(bfp_ids$geneid, bfp_ids$true_name) %>% 
+  map(~plotCounts(dds, gene = .x, returnData = T, intgroup = "timepoint")) %>% 
+  imap(~mutate(.x, true_name = .y)) %>% 
+  map(rownames_to_column,var = "sample") %>% 
+  reduce(bind_rows) %>% 
+  left_join(as_tibble(pData, rownames = "sample")) %>% 
+  mutate(genotype = fct_recode(genotype, "Wild-Type EPEC" = "WT", "T3SS Mutant" = "N"))
+#Calculate z-score
+bfp_z <- bfp_counts %>% 
+  select(sample, true_name, count) %>%  
+  pivot_wider(names_from = "sample", values_from = "count") %>% 
+  column_to_rownames("true_name") %>% 
+  as.matrix() 
+bfp_z_scaled <- t(apply(bfp_z, 1, scale))
+colnames(bfp_z_scaled) <- colnames(bfp_z)
+#Set the breaks to be able to center the heatmap colors around 0
+mycolors <- rcartocolor::carto_pal(name = diverg_pal_choice)
+pal_length <- 255
+mybreaks <-  c(seq(min(bfp_z_scaled), 0, length.out=ceiling(pal_length/2) + 1), 
+                    seq(max(bfp_z_scaled)/pal_length, max(bfp_z_scaled), length.out=floor(pal_length/2)))
+color_scheme <- colorRampPalette(mycolors) (pal_length)
+
+
+#For some reason fct_recode did not want to work the delta sign, so had to work around it
+df <- as.data.frame(colData(rld)) %>%  
+  mutate(`Infection` = fct_recode(genotype, "T3SS-deficient EPEC" = "N",
+                                            "Wild-type EPEC" = "WT"), .keep = 'unused') %>% 
+  mutate(Timepoint = fct_recode(as.factor(timepoint), "Prior to infection" = "0", "45 min" = "45",
+                                "90 min" = "90","180 min" = "180")) %>% 
+  select(-group, -timepoint)
+#Create the ordering in the order of the operons and direction of time
+sample_order_wt <- as_tibble(colData(rld), rownames = "sample") %>% 
+  filter(genotype == "WT") %>% 
+  arrange(timepoint, sample) %>% 
+  pull(sample)
+sample_order_n <- as_tibble(colData(rld), rownames = "sample") %>% 
+  filter(genotype != "WT") %>% 
+  arrange(desc(timepoint), sample) %>% 
+  pull(sample)
+#Create the ordering and annotation of the bfp operon
+bfp_order <- c(str_c("bfp",c("A","G","B","C","U","D","E","F","P","H","I","J","K","L","M")),
+               str_c("per",c("A","B","C")))
+df_row <- bfp_counts %>% 
+  select(true_name) %>% 
+  distinct() %>% 
+  mutate(Locus = if_else(str_detect(true_name,"bfp"), "bfp", "per")) %>% 
+  column_to_rownames(var = "true_name")
+```
+
+
+```{r bfp-plot-print,eval=FALSE,fig.width=7, fig.height=5}
+pheatmap(bfp_z_scaled [,c(sample_order_n, sample_order_wt)], 
+         annotation_col=df, annotation_row = df_row, annotation_names_row = F,
+         annotation_colors = list("Infection" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1]),
+                                  "Timepoint" = c("Prior to infection" = chosen_cont_colors [1],
+                                                  "45 min" = chosen_cont_colors [2],
+                                                  "90 min" = chosen_cont_colors [3],
+                                                  "180 min" = chosen_cont_colors [4]),
+                                  "Locus" = c("bfp" = carto_pal(12,"Safe") [1],
+                                              "per" = carto_pal(12,"Safe") [2])),
+         fontsize = 14, treeheight_row = 0, treeheight_col = 0, breaks = mybreaks,
+         show_rownames = T, show_colnames = F, border_color = NA, fontsize_row = 14,
+         gaps_row = 14,
+         color = color_scheme, cluster_rows = F, cluster_cols = F,
+         width = 7, height = 5, 
+         filename = here::here(str_c(res_path,"bfp operon differences.png")))
+```
+
+
 Check overlap of DE genes between induced by time and by working T3SS
 ```{r de-overlap}
 #Create a list of DE genes for each comparison
