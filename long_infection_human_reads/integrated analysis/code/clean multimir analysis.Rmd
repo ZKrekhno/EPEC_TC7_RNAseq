@@ -18,7 +18,6 @@ library('org.Hs.eg.db')
 library(biomaRt)
 library(clusterProfiler)
 library(enrichplot)
-library(ggvenn)
 library(eulerr)
 library(tidyverse)
 library(ggprism)
@@ -65,13 +64,23 @@ de_mirna <- list(`WT vs EscN` = mi_filt_up$Mature.miRNA,
                  `WT vs UI` = wt_de_mirna$Mature.miRNA, 
                  `EscN vs UI` = n_de_mirna$Mature.miRNA) %>% 
   map(str_remove,"hsa-miR-")
-#pdf(here::here("long_infection_human_reads/integrated analysis/results/Venn diagrams of shared differentially expressed miRNA.pdf"), width = 7, height = 5)
-ggvenn(de_mirna, show_elements = F, text_size = 5, set_name_size = 6) 
-ggvenn(de_mirna, show_elements = T)
+fit1 <- euler(de_mirna)
+#png(here::here("long_infection_human_reads/integrated analysis/results/Venn diagrams of shared differentially expressed miRNA.png"),
+ #      width = 7, height = 5, units = "in", res = 1080)
+plot(fit1, 
+     fills = list(fill = c("red","green","blue"),
+                  alpha = 0.5),
+     labels = list(fontsize = 20),
+     quantities = list(fontsize = 24))
 #dev.off()
-ggvenn(de_mirna, show_elements = F, text_size = 5, set_name_size = 6) 
-#ggsave(here::here("long_infection_human_reads/integrated analysis/results/Venn diagrams of shared differentially expressed miRNA.svg"),
- #      width = 7, height = 5)
+#svg(here::here("long_infection_human_reads/integrated analysis/results/Venn diagrams of shared differentially expressed miRNA.svg"),
+    #   width = 7, height = 5)
+plot(fit1, 
+     fills = list(fill = c("red","green","blue"),
+                  alpha = 0.5),
+     labels = list(fontsize = 20),
+     quantities = list(fontsize = 24))
+#dev.off()
 ```
 
 From this it is evident, that DE miRNA are quite different across conditions WtvsUI and EscNvsUI, so let's investigate why they don't show up as WTvsEscN
