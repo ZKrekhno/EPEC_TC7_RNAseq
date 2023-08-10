@@ -349,6 +349,7 @@ df_row <- bfp_counts %>%
   distinct() %>% 
   mutate(Locus = if_else(str_detect(true_name,"bfp"), "bfp", "per")) %>% 
   column_to_rownames(var = "true_name")
+#svg(here::here(str_c(res_path,"bfp operon differences.svg")), width = 7, height = 5)
 pheatmap(bfp_z_scaled [,c(sample_order_n, sample_order_wt)], 
          annotation_col=df, annotation_row = df_row, annotation_names_row = F,
          annotation_colors = list("Strain" = c("WT" =carto_pal(12,discrete_pal_choice) [2],
@@ -363,6 +364,7 @@ pheatmap(bfp_z_scaled [,c(sample_order_n, sample_order_wt)],
          show_rownames = T, show_colnames = F, border_color = NA, fontsize_row = 14,
          gaps_row = 14, legend = F, annotation_names_col = F, 
          color = color_scheme, cluster_rows = F, cluster_cols = F)
+#dev.off()
 ```
 
 
@@ -709,33 +711,34 @@ color_scheme <- colorRampPalette(mycolors) (pal_length)
 
 #For some reason fct_recode did not want to work the delta sign, so had to work around it
 df <- as.data.frame(colData(rld)) %>%  
-  mutate(`Infection status` = fct_recode(genotype, "T3SS-deficient EPEC" = "N",
-                                            "Wild-type EPEC" = "WT"), .keep = 'unused') %>% 
-  mutate(Timepoint = fct_recode(as.factor(timepoint), "Prior to infection" = "0", "45 min" = "45",
-                                "90 min" = "90","180 min" = "180")) %>% 
+  mutate(`Strain` = fct_recode(genotype, "Mutant" = "N",
+                                            "WT" = "WT"), .keep = 'unused') %>% 
+  mutate(`Time of Infection (min)` = fct_recode(as.factor(timepoint), "0" = "0", "45" = "45",
+                                "90" = "90","180" = "180")) %>% 
   select(-group, -timepoint)
-
-pheatmap(mat, annotation_col=df, 
-         annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
-                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1]),
-                                  "Timepoint" = c("Prior to infection" = chosen_cont_colors [1],
-                                                  "45 min" = chosen_cont_colors [2],
-                                                  "90 min" = chosen_cont_colors [3],
-                                                  "180 min" = chosen_cont_colors [4])),
-         fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
+#svg(here::here(str_c(res_path,"top 100 DE genes WT180.svg")), width = 8, height = 5)
+pheatmap(mat [,c(sample_order_n, sample_order_wt)], annotation_col=df, 
+         annotation_colors = list("Strain" = c("WT" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "Mutant" = carto_pal(12,discrete_pal_choice) [1]),
+                                  "Time of Infection (min)" = c("0" = chosen_cont_colors [1],
+                                                  "45" = chosen_cont_colors [2],
+                                                  "90" = chosen_cont_colors [3],
+                                                  "180" = chosen_cont_colors [4])),
+         fontsize = 11, treeheight_row = 0, treeheight_col = 0, breaks = mybreaks, cluster_cols = F,
          show_rownames = F, show_colnames = F, border_color = NA, fontsize_row = 3.5,
          color = color_scheme)
+#dev.off()
 ```
 
 ```{r heatmap-save, eval=FALSE}
-pheatmap(mat, annotation_col=df, 
-         annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
-                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1]),
-                                  "Timepoint" = c("Prior to infection" = chosen_cont_colors [1],
-                                                  "45 min" = chosen_cont_colors [2],
-                                                  "90 min" = chosen_cont_colors [3],
-                                                  "180 min" = chosen_cont_colors [4])),
-         fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
+pheatmap(mat [,c(sample_order_n, sample_order_wt)], annotation_col=df, 
+         annotation_colors = list("Strain" = c("WT" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "Mutant" = carto_pal(12,discrete_pal_choice) [1]),
+                                  "Time of Infection (min)" = c("0" = chosen_cont_colors [1],
+                                                  "45" = chosen_cont_colors [2],
+                                                  "90" = chosen_cont_colors [3],
+                                                  "180" = chosen_cont_colors [4])),
+         fontsize = 11, treeheight_row = 0, treeheight_col = 0, breaks = mybreaks, cluster_cols = F,
          show_rownames = F, show_colnames = F, border_color = NA, fontsize_row = 3.5,
          color = color_scheme,
          width = 8, height = 6, 
