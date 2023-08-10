@@ -188,14 +188,14 @@ assay(rld2.nobatch) <- mat
 normal_PCA <- DESeq2::plotPCA(rld2.nobatch, returnData = T, intgroup = "group") %>% 
   mutate(genotype = str_remove(group, "[:digit:]+")) %>% 
   mutate(genotype = fct_relevel(genotype, "UI", "WT", "N"))
-#png(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/PCA plot of normalized counts legend bottom.png"), width = 7, height = 5, units = "in", res = 1080)
-pca_plot <- ggplot(data = normal_PCA, aes(shape = genotype, color = genotype)) +
+#Print the PCA plot out
+pca_plot <- ggplot(data = normal_PCA, aes(x = PC1, y = PC2, shape = genotype, color = genotype)) +
   scale_color_manual(labels = c("N" = expression(Delta*italic("escN")),
                                 "WT" = "WT", "UI" = "Uninfected"),
                      values = c("UI" = carto_pal(12,discrete_pal_choice) [10],
                                 "WT" = carto_pal(12,discrete_pal_choice) [2], 
                                 "N" = carto_pal(12,discrete_pal_choice) [1])) +
-  geom_point(mapping = aes(x = PC1, y = PC2), size = 5) +
+  geom_point(size = 6) +
   labs(shape = "Infection Status", color = "Infection Status",
        x = "PC1: 88% variance", y = "PC2: 6% variance") +
   scale_shape_manual(labels = c("N" = expression(Delta*italic("escN")),
@@ -206,7 +206,7 @@ pca_plot <- ggplot(data = normal_PCA, aes(shape = genotype, color = genotype)) +
   theme(legend.title = element_text(),
         legend.text.align = 0,
         axis.text = element_text(size = 19))
-#dev.off()
+
 pca_plot
 #ggsave(here::here(str_c(res_path,"PCA plot of normalized counts.png")), pca_plot, width = 7, height = 5, dpi = 1080)
 #ggsave(here::here(str_c(res_path,"PCA plot of normalized counts.svg")), pca_plot, width = 7, height = 5)

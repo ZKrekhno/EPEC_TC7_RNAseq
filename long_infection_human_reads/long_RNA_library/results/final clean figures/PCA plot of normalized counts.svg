@@ -30,15 +30,15 @@
 </defs>
 <g clip-path='url(#cpNjIuNzJ8MzI0LjE1fDguOTd8Mjk1LjIy)'>
 <rect x='62.72' y='8.97' width='261.43' height='286.25' style='stroke-width: 2.74; stroke: none;' />
-<polygon points='84.07,169.98 95.45,169.98 95.45,158.60 84.07,158.60 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
-<polygon points='91.10,199.85 102.48,199.85 102.48,188.47 91.10,188.47 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
-<polygon points='68.92,211.02 80.29,211.02 80.29,199.64 68.92,199.64 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
-<polygon points='290.58,252.57 298.24,265.85 282.92,265.85 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
-<polygon points='290.80,219.79 298.46,233.06 283.14,233.06 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
-<circle cx='260.79' cy='21.98' r='5.69' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
-<circle cx='274.05' cy='74.86' r='5.69' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
-<circle cx='287.22' cy='133.99' r='5.69' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
-<polygon points='312.27,273.36 319.93,286.63 304.61,286.63 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
+<polygon points='83.01,171.05 96.52,171.05 96.52,157.54 83.01,157.54 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
+<polygon points='90.04,200.92 103.55,200.92 103.55,187.40 90.04,187.40 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
+<polygon points='67.85,212.08 81.36,212.08 81.36,198.57 67.85,198.57 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
+<polygon points='290.58,250.92 299.68,266.68 281.48,266.68 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
+<polygon points='290.80,218.13 299.90,233.89 281.70,233.89 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
+<circle cx='260.79' cy='21.98' r='6.76' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
+<circle cx='274.05' cy='74.86' r='6.76' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
+<circle cx='287.22' cy='133.99' r='6.76' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
+<polygon points='312.27,271.70 321.37,287.46 303.17,287.46 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
 </g>
 <g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwzNjAuMDA=)'>
 <polyline points='62.72,295.22 62.72,8.97 ' style='stroke-width: 2.74; stroke-linecap: square;' />
@@ -60,9 +60,9 @@
 <text x='193.44' y='347.24' text-anchor='middle' style='font-size: 18.00px; font-weight: bold; font-family: "Arial";' textLength='160.08px' lengthAdjust='spacingAndGlyphs'>PC1: 88% variance</text>
 <text transform='translate(21.85,152.09) rotate(-90)' text-anchor='middle' style='font-size: 18.00px; font-weight: bold; font-family: "Arial";' textLength='150.07px' lengthAdjust='spacingAndGlyphs'>PC2: 6% variance</text>
 <text x='418.56' y='128.13' text-anchor='middle' style='font-size: 18.00px; font-weight: bold; font-family: "Arial";' textLength='135.01px' lengthAdjust='spacingAndGlyphs'>Infection Status</text>
-<polygon points='361.50,153.33 372.88,153.33 372.88,141.95 361.50,141.95 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
-<circle cx='367.19' cy='164.92' r='5.69' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
-<polygon points='367.19,173.35 374.85,186.62 359.53,186.62 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
+<polygon points='360.44,154.39 373.95,154.39 373.95,140.88 360.44,140.88 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
+<circle cx='367.19' cy='164.92' r='6.76' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
+<polygon points='367.19,171.69 376.29,187.45 358.09,187.45 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
 <text x='392.30' y='152.79' style='font-size: 14.40px; font-family: "Arial";' textLength='68.82px' lengthAdjust='spacingAndGlyphs'>Uninfected</text>
 <text x='392.30' y='170.07' style='font-size: 14.40px; font-family: "Arial";' textLength='22.38px' lengthAdjust='spacingAndGlyphs'>WT</text>
 <text x='392.30' y='187.27' style='font-size: 14.40px; font-family: "Arial";' textLength='9.27px' lengthAdjust='spacingAndGlyphs'>Δ</text>
