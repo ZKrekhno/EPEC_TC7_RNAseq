@@ -29,7 +29,7 @@ library(rcartocolor)
 ```
 
 Define all helper functions and color choices
-```{r include=TRUE}
+```{r helper, include=TRUE}
 theme_set(theme_prism(base_size = 14))
 #Set color choices from CARTOcolors
 discrete_pal_choice <- "Bold"
@@ -37,6 +37,9 @@ cont_pal_choice <- "BluYl"
 diverg_pal_choice <- "Geyser"
 #Helper functions
 calc_relative <- function(x) x/sum(x) * 100
+#Set up paths for data, and results
+data_path <- "long_infection_human_reads/long_RNA_library/data/"
+res_path <- "long_infection_human_reads/long_RNA_library/results/final clean figures/"
 ```
 
 ```{r}
@@ -164,7 +167,7 @@ plotRLE(dataOffset, col = pData$graph_cols, main = "UQ normalized counts")
 plotRLE(rv2, col = pData$graph_cols, main = "UQ normalized counts + RUVs with 2 k")
 ```
 
-``` {r dds}
+``` {r dds, fig.width=7, fig.height=5}
 #Construct the DESeq object and indicate that RUV factors need to be accounted for in the design
 dds <- DESeqDataSetFromMatrix(countData = counts(rv2),
                               colData = pData(rv2),
@@ -182,22 +185,31 @@ mat <- limma::removeBatchEffect(assay(rld),
                                 design = model.matrix(~ group, colData(rld)))
 rld2.nobatch <- rld
 assay(rld2.nobatch) <- mat
-normal_PCA <- DESeq2::plotPCA(rld2.nobatch, returnData = T, intgroup = "group")
-#png(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/PCA plot of normalized counts legend bottom.png"), width = 6, height = 5, units = "in", res = 1080)
-ggplot(data = normal_PCA, aes(shape = pData$genotype, color = pData$genotype)) +
-  scale_color_manual(labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
-                                "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
+normal_PCA <- DESeq2::plotPCA(rld2.nobatch, returnData = T, intgroup = "group") %>% 
+  mutate(genotype = str_remove(group, "[:digit:]+")) %>% 
+  mutate(genotype = fct_relevel(genotype, "UI", "WT", "N"))
+#png(here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/PCA plot of normalized counts legend bottom.png"), width = 7, height = 5, units = "in", res = 1080)
+pca_plot <- ggplot(data = normal_PCA, aes(shape = genotype, color = genotype)) +
+  scale_color_manual(labels = c("N" = expression(Delta*italic("escN")),
+                                "WT" = "WT", "UI" = "Uninfected"),
                      values = c("UI" = carto_pal(12,discrete_pal_choice) [10],
                                 "WT" = carto_pal(12,discrete_pal_choice) [2], 
                                 "N" = carto_pal(12,discrete_pal_choice) [1])) +
   geom_point(mapping = aes(x = PC1, y = PC2), size = 5) +
-  labs(title = "RUVs corrected PCA plot", shape = "Infection", color = "Infection",
+  labs(shape = "Infection Status", color = "Infection Status",
        x = "PC1: 88% variance", y = "PC2: 6% variance") +
-  scale_shape_manual(labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
-                                "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
+  scale_shape_manual(labels = c("N" = expression(Delta*italic("escN")),
+                                "WT" = "WT", "UI" = "Uninfected"),
                      values = c("UI" = 15, "WT" = 16, "N" = 17)) +
-  theme(legend.position = "bottom", legend.title = element_text())
+  theme_prism(base_size = 18) +
+  theme(legend.title = element_text()) +
+  theme(legend.title = element_text(),
+        legend.text.align = 0,
+        axis.text = element_text(size = 19))
 #dev.off()
+pca_plot
+#ggsave(here::here(str_c(res_path,"PCA plot of normalized counts.png")), pca_plot, width = 7, height = 5, dpi = 1080)
+#ggsave(here::here(str_c(res_path,"PCA plot of normalized counts.svg")), pca_plot, width = 7, height = 5)
 ```
 
 
