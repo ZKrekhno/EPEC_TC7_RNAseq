@@ -252,20 +252,22 @@ normal_PCA <- plotPCA(rld, returnData = T, intgroup = "group") %>%
   mutate(genotype = fct_relevel(genotype, "WT", "N"))
   
 #Plot the PCA graphs of the normalized counts
-png(here::here(str_c(res_path,"PCA plot of normalized counts.png")), width = 7, height = 5, units = "in", res = 1080)
-ggplot(data = normal_PCA, aes(shape = genotype)) +
-   scale_color_manual(values = chosen_cont_colors,breaks = c(0,45,90,180)) +
-  #scale_color_carto_c(palette = cont_pal_choice, breaks = c(0,45,90,180)) +
+pca_plot <- ggplot(data = normal_PCA, aes(shape = genotype)) +
   geom_point(mapping = aes(x = PC1, y = PC2, color = factor(timepoint)), size = 5) +
   labs(title = "EDAseq normalized DESeq2 PCA plot \nnot including the outlier",
        x = "PC1: 40% variance",
        y = "PC2: 14% variance") +
-  guides(color = guide_legend(title = "Time of infection (min)"),
-         shape = guide_legend(title = "Strain")) +
-  scale_shape_manual(labels = c("WT" = "Wild-type EPEC",
-                                "N" = paste0(greeks("Delta"),"EscN EPEC")),
-                     values = c("Uninfected" = 15, "WT" = 16, "N" = 17))
-dev.off()
+  guides(color = guide_legend(title = "Time of Infection (min)", order = 1),
+         shape = guide_legend(title = "Strain", order = 2)) +
+  scale_shape_manual(labels = c("WT" = "WT",
+                                "N" = expression(Delta*italic(escN))),
+                     values = c("Uninfected" = 15, "WT" = 16, "N" = 17)) +
+  scale_color_manual(values = chosen_cont_colors,breaks = c(0,45,90,180)) +
+  theme(legend.title = element_text(),
+        legend.text.align = 0)
+pca_plot
+#ggsave(here::here(str_c(res_path,"PCA plot of normalized counts.png")), pca_plot, width = 7, height = 5, dpi = 1080)
+#ggsave(here::here(str_c(res_path,"PCA plot of normalized counts.svg")), pca_plot, width = 7, height = 5)
 ```
 Identify differentially expressed genes
 ```{r deseq-res}
@@ -578,7 +580,7 @@ EPEC code in KEGG is ecg
 
 For GSEA, use all genes, not just DE - https://hbctraining.github.io/Training-modules/DGE-functional-analysis/lessons/functional_analysis_2019.html
 
-```{r clusterprofiler}
+```{r clusterprofiler, eval=FALSE}
 #library(pathview)
 #If KEGG is giving troubles with clusterprofiler run this, can switch to wget instead of auto:
 library(R.utils)
@@ -667,6 +669,9 @@ walk2(ora_updown_df, names(ora_updown_df),
  #     c(str_c("whole_ORA",names(ora_list)), str_c("GSEA_", names(keep(gse_list, ~nrow(.)>0))), names(ora_updown_df)),
   #    ~write_csv(as.data.frame(.x), file = here::here(str_c(res_path,"tables/",.y,".csv"))))
 ```
+Redo the GSEA plot
+
+
 Finally make a heatmap for top DE genes
 ```{r heatmap, fig.width=8, fig.height=6}
 heat_mat <- assay(rld)
