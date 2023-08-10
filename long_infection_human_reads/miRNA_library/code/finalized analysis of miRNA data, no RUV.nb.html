@@ -1755,21 +1755,181 @@ long infection</h1>
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxua25pdHI6Om9wdHNfY2h1bmskc2V0KGVjaG8gPSBUUlVFKVxua25pdHI6Om9wdHNfY2h1bmskc2V0KGluY2x1ZGUgPSBUUlVFKVxubGlicmFyeShiaW9tYVJ0KVxubGlicmFyeShsaW1tYSlcbmxpYnJhcnkoZ3JlZWtMZXR0ZXJzKVxubGlicmFyeShSVVZTZXEpXG5saWJyYXJ5KFBDQXRvb2xzKVxubGlicmFyeShFREFTZXEpXG5saWJyYXJ5KERFU2VxMilcbmxpYnJhcnkoZ2dwcmlzbSlcbmxpYnJhcnkoZXVsZXJyKVxubGlicmFyeSh0aWR5dmVyc2UpXG5saWJyYXJ5KHJjYXJ0b2NvbG9yKVxudGhlbWVfc2V0KHRoZW1lX3ByaXNtKGJhc2Vfc2l6ZSA9IDE0KSlcbmBgYCJ9 -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxua25pdHI6Om9wdHNfY2h1bmskc2V0KGVjaG8gPSBUUlVFKVxua25pdHI6Om9wdHNfY2h1bmskc2V0KGluY2x1ZGUgPSBUUlVFKVxubGlicmFyeShiaW9tYVJ0KVxuYGBgIn0= -->
 <pre class="r"><code>knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(include = TRUE)
-library(biomaRt)
-library(limma)
-library(greekLetters)
-library(RUVSeq)
-library(PCAtools)
-library(EDASeq)
+library(biomaRt)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiUmVnaXN0ZXJlZCBTMyBtZXRob2RzIG92ZXJ3cml0dGVuIGJ5ICdkYnBseXInOlxuICBtZXRob2QgICAgICAgICBmcm9tXG4gIHByaW50LnRibF9sYXp5ICAgICBcbiAgcHJpbnQudGJsX3NxbCAgICAgIFxuIn0= -->
+<pre><code>Registered S3 methods overwritten by &#39;dbplyr&#39;:
+  method         from
+  print.tbl_lazy     
+  print.tbl_sql      </code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShsaW1tYSlcbmxpYnJhcnkoZ3JlZWtMZXR0ZXJzKVxuYGBgIn0= -->
+<pre class="r"><code>library(limma)
+library(greekLetters)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiV2FybmluZzogcGFja2FnZSDigJhncmVla0xldHRlcnPigJkgd2FzIGJ1aWx0IHVuZGVyIFIgdmVyc2lvbiA0LjEuM1xuIn0= -->
+<pre><code>Warning: package ‘greekLetters’ was built under R version 4.1.3</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShSVVZTZXEpXG5gYGAifQ== -->
+<pre class="r"><code>library(RUVSeq)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBCaW9iYXNlXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IEJpb2NHZW5lcmljc1xuXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYQmlvY0dlbmVyaWNz4oCZXG5cblRoZSBmb2xsb3dpbmcgb2JqZWN0IGlzIG1hc2tlZCBmcm9tIOKAmHBhY2thZ2U6bGltbWHigJk6XG5cbiAgICBwbG90TUFcblxuVGhlIGZvbGxvd2luZyBvYmplY3RzIGFyZSBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOnN0YXRz4oCZOlxuXG4gICAgSVFSLCBtYWQsIHNkLCB2YXIsIHh0YWJzXG5cblRoZSBmb2xsb3dpbmcgb2JqZWN0cyBhcmUgbWFza2VkIGZyb20g4oCYcGFja2FnZTpiYXNl4oCZOlxuXG4gICAgYW55RHVwbGljYXRlZCwgYXBwZW5kLCBhcy5kYXRhLmZyYW1lLCBiYXNlbmFtZSwgY2JpbmQsIGNvbG5hbWVzLCBkaXJuYW1lLCBkby5jYWxsLCBkdXBsaWNhdGVkLCBldmFsLCBldmFscSwgRmlsdGVyLCBGaW5kLCBnZXQsXG4gICAgZ3JlcCwgZ3JlcGwsIGludGVyc2VjdCwgaXMudW5zb3J0ZWQsIGxhcHBseSwgTWFwLCBtYXBwbHksIG1hdGNoLCBtZ2V0LCBvcmRlciwgcGFzdGUsIHBtYXgsIHBtYXguaW50LCBwbWluLCBwbWluLmludCwgUG9zaXRpb24sXG4gICAgcmFuaywgcmJpbmQsIFJlZHVjZSwgcm93bmFtZXMsIHNhcHBseSwgc2V0ZGlmZiwgc29ydCwgdGFibGUsIHRhcHBseSwgdW5pb24sIHVuaXF1ZSwgdW5zcGxpdCwgd2hpY2gubWF4LCB3aGljaC5taW5cblxuV2VsY29tZSB0byBCaW9jb25kdWN0b3JcblxuICAgIFZpZ25ldHRlcyBjb250YWluIGludHJvZHVjdG9yeSBtYXRlcmlhbDsgdmlldyB3aXRoICdicm93c2VWaWduZXR0ZXMoKScuIFRvIGNpdGUgQmlvY29uZHVjdG9yLCBzZWUgJ2NpdGF0aW9uKFwiQmlvYmFzZVwiKScsIGFuZCBmb3JcbiAgICBwYWNrYWdlcyAnY2l0YXRpb24oXCJwa2duYW1lXCIpJy5cblxuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBFREFTZXFcbkxvYWRpbmcgcmVxdWlyZWQgcGFja2FnZTogU2hvcnRSZWFkXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IEJpb2NQYXJhbGxlbFxuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBCaW9zdHJpbmdzXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IFM0VmVjdG9yc1xuV2FybmluZzogcGFja2FnZSDigJhTNFZlY3RvcnPigJkgd2FzIGJ1aWx0IHVuZGVyIFIgdmVyc2lvbiA0LjEuMkxvYWRpbmcgcmVxdWlyZWQgcGFja2FnZTogc3RhdHM0XG5cbkF0dGFjaGluZyBwYWNrYWdlOiDigJhTNFZlY3RvcnPigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3RzIGFyZSBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOmJhc2XigJk6XG5cbiAgICBleHBhbmQuZ3JpZCwgSSwgdW5uYW1lXG5cbkxvYWRpbmcgcmVxdWlyZWQgcGFja2FnZTogSVJhbmdlc1xuXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYSVJhbmdlc+KAmVxuXG5UaGUgZm9sbG93aW5nIG9iamVjdCBpcyBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOmdyRGV2aWNlc+KAmTpcblxuICAgIHdpbmRvd3NcblxuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBYVmVjdG9yXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IEdlbm9tZUluZm9EYlxuXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYQmlvc3RyaW5nc+KAmVxuXG5UaGUgZm9sbG93aW5nIG9iamVjdCBpcyBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOmJhc2XigJk6XG5cbiAgICBzdHJzcGxpdFxuXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IFJzYW10b29sc1xuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBHZW5vbWljUmFuZ2VzXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IEdlbm9taWNBbGlnbm1lbnRzXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IFN1bW1hcml6ZWRFeHBlcmltZW50XG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IE1hdHJpeEdlbmVyaWNzXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IG1hdHJpeFN0YXRzXG5XYXJuaW5nOiBwYWNrYWdlIOKAmG1hdHJpeFN0YXRz4oCZIHdhcyBidWlsdCB1bmRlciBSIHZlcnNpb24gNC4xLjNcbkF0dGFjaGluZyBwYWNrYWdlOiDigJhtYXRyaXhTdGF0c+KAmVxuXG5UaGUgZm9sbG93aW5nIG9iamVjdHMgYXJlIG1hc2tlZCBmcm9tIOKAmHBhY2thZ2U6QmlvYmFzZeKAmTpcblxuICAgIGFueU1pc3NpbmcsIHJvd01lZGlhbnNcblxuXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYTWF0cml4R2VuZXJpY3PigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3RzIGFyZSBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOm1hdHJpeFN0YXRz4oCZOlxuXG4gICAgY29sQWxscywgY29sQW55TkFzLCBjb2xBbnlzLCBjb2xBdmdzUGVyUm93U2V0LCBjb2xDb2xsYXBzZSwgY29sQ291bnRzLCBjb2xDdW1tYXhzLCBjb2xDdW1taW5zLCBjb2xDdW1wcm9kcywgY29sQ3Vtc3VtcywgY29sRGlmZnMsXG4gICAgY29sSVFSRGlmZnMsIGNvbElRUnMsIGNvbExvZ1N1bUV4cHMsIGNvbE1hZERpZmZzLCBjb2xNYWRzLCBjb2xNYXhzLCBjb2xNZWFuczIsIGNvbE1lZGlhbnMsIGNvbE1pbnMsIGNvbE9yZGVyU3RhdHMsIGNvbFByb2RzLFxuICAgIGNvbFF1YW50aWxlcywgY29sUmFuZ2VzLCBjb2xSYW5rcywgY29sU2REaWZmcywgY29sU2RzLCBjb2xTdW1zMiwgY29sVGFidWxhdGVzLCBjb2xWYXJEaWZmcywgY29sVmFycywgY29sV2VpZ2h0ZWRNYWRzLFxuICAgIGNvbFdlaWdodGVkTWVhbnMsIGNvbFdlaWdodGVkTWVkaWFucywgY29sV2VpZ2h0ZWRTZHMsIGNvbFdlaWdodGVkVmFycywgcm93QWxscywgcm93QW55TkFzLCByb3dBbnlzLCByb3dBdmdzUGVyQ29sU2V0LCByb3dDb2xsYXBzZSxcbiAgICByb3dDb3VudHMsIHJvd0N1bW1heHMsIHJvd0N1bW1pbnMsIHJvd0N1bXByb2RzLCByb3dDdW1zdW1zLCByb3dEaWZmcywgcm93SVFSRGlmZnMsIHJvd0lRUnMsIHJvd0xvZ1N1bUV4cHMsIHJvd01hZERpZmZzLCByb3dNYWRzLFxuICAgIHJvd01heHMsIHJvd01lYW5zMiwgcm93TWVkaWFucywgcm93TWlucywgcm93T3JkZXJTdGF0cywgcm93UHJvZHMsIHJvd1F1YW50aWxlcywgcm93UmFuZ2VzLCByb3dSYW5rcywgcm93U2REaWZmcywgcm93U2RzLCByb3dTdW1zMixcbiAgICByb3dUYWJ1bGF0ZXMsIHJvd1ZhckRpZmZzLCByb3dWYXJzLCByb3dXZWlnaHRlZE1hZHMsIHJvd1dlaWdodGVkTWVhbnMsIHJvd1dlaWdodGVkTWVkaWFucywgcm93V2VpZ2h0ZWRTZHMsIHJvd1dlaWdodGVkVmFyc1xuXG5UaGUgZm9sbG93aW5nIG9iamVjdCBpcyBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOkJpb2Jhc2XigJk6XG5cbiAgICByb3dNZWRpYW5zXG5cbkxvYWRpbmcgcmVxdWlyZWQgcGFja2FnZTogZWRnZVJcbiJ9 -->
+<pre><code>Loading required package: Biobase
+Loading required package: BiocGenerics
+
+Attaching package: ‘BiocGenerics’
+
+The following object is masked from ‘package:limma’:
+
+    plotMA
+
+The following objects are masked from ‘package:stats’:
+
+    IQR, mad, sd, var, xtabs
+
+The following objects are masked from ‘package:base’:
+
+    anyDuplicated, append, as.data.frame, basename, cbind, colnames, dirname, do.call, duplicated, eval, evalq, Filter, Find, get,
+    grep, grepl, intersect, is.unsorted, lapply, Map, mapply, match, mget, order, paste, pmax, pmax.int, pmin, pmin.int, Position,
+    rank, rbind, Reduce, rownames, sapply, setdiff, sort, table, tapply, union, unique, unsplit, which.max, which.min
+
+Welcome to Bioconductor
+
+    Vignettes contain introductory material; view with &#39;browseVignettes()&#39;. To cite Bioconductor, see &#39;citation(&quot;Biobase&quot;)&#39;, and for
+    packages &#39;citation(&quot;pkgname&quot;)&#39;.
+
+Loading required package: EDASeq
+Loading required package: ShortRead
+Loading required package: BiocParallel
+Loading required package: Biostrings
+Loading required package: S4Vectors
+Warning: package ‘S4Vectors’ was built under R version 4.1.2Loading required package: stats4
+
+Attaching package: ‘S4Vectors’
+
+The following objects are masked from ‘package:base’:
+
+    expand.grid, I, unname
+
+Loading required package: IRanges
+
+Attaching package: ‘IRanges’
+
+The following object is masked from ‘package:grDevices’:
+
+    windows
+
+Loading required package: XVector
+Loading required package: GenomeInfoDb
+
+Attaching package: ‘Biostrings’
+
+The following object is masked from ‘package:base’:
+
+    strsplit
+
+Loading required package: Rsamtools
+Loading required package: GenomicRanges
+Loading required package: GenomicAlignments
+Loading required package: SummarizedExperiment
+Loading required package: MatrixGenerics
+Loading required package: matrixStats
+Warning: package ‘matrixStats’ was built under R version 4.1.3
+Attaching package: ‘matrixStats’
+
+The following objects are masked from ‘package:Biobase’:
+
+    anyMissing, rowMedians
+
+
+Attaching package: ‘MatrixGenerics’
+
+The following objects are masked from ‘package:matrixStats’:
+
+    colAlls, colAnyNAs, colAnys, colAvgsPerRowSet, colCollapse, colCounts, colCummaxs, colCummins, colCumprods, colCumsums, colDiffs,
+    colIQRDiffs, colIQRs, colLogSumExps, colMadDiffs, colMads, colMaxs, colMeans2, colMedians, colMins, colOrderStats, colProds,
+    colQuantiles, colRanges, colRanks, colSdDiffs, colSds, colSums2, colTabulates, colVarDiffs, colVars, colWeightedMads,
+    colWeightedMeans, colWeightedMedians, colWeightedSds, colWeightedVars, rowAlls, rowAnyNAs, rowAnys, rowAvgsPerColSet, rowCollapse,
+    rowCounts, rowCummaxs, rowCummins, rowCumprods, rowCumsums, rowDiffs, rowIQRDiffs, rowIQRs, rowLogSumExps, rowMadDiffs, rowMads,
+    rowMaxs, rowMeans2, rowMedians, rowMins, rowOrderStats, rowProds, rowQuantiles, rowRanges, rowRanks, rowSdDiffs, rowSds, rowSums2,
+    rowTabulates, rowVarDiffs, rowVars, rowWeightedMads, rowWeightedMeans, rowWeightedMedians, rowWeightedSds, rowWeightedVars
+
+The following object is masked from ‘package:Biobase’:
+
+    rowMedians
+
+Loading required package: edgeR</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShQQ0F0b29scylcbmBgYCJ9 -->
+<pre class="r"><code>library(PCAtools)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBnZ3Bsb3QyXG5XYXJuaW5nOiBwYWNrYWdlIOKAmGdncGxvdDLigJkgd2FzIGJ1aWx0IHVuZGVyIFIgdmVyc2lvbiA0LjEuM0xvYWRpbmcgcmVxdWlyZWQgcGFja2FnZTogZ2dyZXBlbFxuV2FybmluZzogcGFja2FnZSDigJhnZ3JlcGVs4oCZIHdhcyBidWlsdCB1bmRlciBSIHZlcnNpb24gNC4xLjJcbkF0dGFjaGluZyBwYWNrYWdlOiDigJhQQ0F0b29sc+KAmVxuXG5UaGUgZm9sbG93aW5nIG9iamVjdHMgYXJlIG1hc2tlZCBmcm9tIOKAmHBhY2thZ2U6c3RhdHPigJk6XG5cbiAgICBiaXBsb3QsIHNjcmVlcGxvdFxuIn0= -->
+<pre><code>Loading required package: ggplot2
+Warning: package ‘ggplot2’ was built under R version 4.1.3Loading required package: ggrepel
+Warning: package ‘ggrepel’ was built under R version 4.1.2
+Attaching package: ‘PCAtools’
+
+The following objects are masked from ‘package:stats’:
+
+    biplot, screeplot</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShFREFTZXEpXG5saWJyYXJ5KERFU2VxMilcbmxpYnJhcnkoZ2dwcmlzbSlcbmBgYCJ9 -->
+<pre class="r"><code>library(EDASeq)
 library(DESeq2)
-library(ggprism)
-library(eulerr)
-library(tidyverse)
-library(rcartocolor)
-theme_set(theme_prism(base_size = 14))</code></pre>
+library(ggprism)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiV2FybmluZzogcGFja2FnZSDigJhnZ3ByaXNt4oCZIHdhcyBidWlsdCB1bmRlciBSIHZlcnNpb24gNC4xLjNcbiJ9 -->
+<pre><code>Warning: package ‘ggprism’ was built under R version 4.1.3</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShldWxlcnIpXG5gYGAifQ== -->
+<pre class="r"><code>library(eulerr)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiV2FybmluZzogcGFja2FnZSDigJhldWxlcnLigJkgd2FzIGJ1aWx0IHVuZGVyIFIgdmVyc2lvbiA0LjEuM1xuIn0= -->
+<pre><code>Warning: package ‘eulerr’ was built under R version 4.1.3</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeSh0aWR5dmVyc2UpXG5gYGAifQ== -->
+<pre class="r"><code>library(tidyverse)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiV2FybmluZzogcGFja2FnZSDigJh0aWR5dmVyc2XigJkgd2FzIGJ1aWx0IHVuZGVyIFIgdmVyc2lvbiA0LjEuM1dhcm5pbmc6IHBhY2thZ2Ug4oCYdGliYmxl4oCZIHdhcyBidWlsdCB1bmRlciBSIHZlcnNpb24gNC4xLjNXYXJuaW5nOiBwYWNrYWdlIOKAmHRpZHly4oCZIHdhcyBidWlsdCB1bmRlciBSIHZlcnNpb24gNC4xLjNXYXJuaW5nOiBwYWNrYWdlIOKAmHJlYWRy4oCZIHdhcyBidWlsdCB1bmRlciBSIHZlcnNpb24gNC4xLjNXYXJuaW5nOiBwYWNrYWdlIOKAmHB1cnJy4oCZIHdhcyBidWlsdCB1bmRlciBSIHZlcnNpb24gNC4xLjNXYXJuaW5nOiBwYWNrYWdlIOKAmGRwbHly4oCZIHdhcyBidWlsdCB1bmRlciBSIHZlcnNpb24gNC4xLjNXYXJuaW5nOiBwYWNrYWdlIOKAmHN0cmluZ3LigJkgd2FzIGJ1aWx0IHVuZGVyIFIgdmVyc2lvbiA0LjEuM1dhcm5pbmc6IHBhY2thZ2Ug4oCYZm9yY2F0c+KAmSB3YXMgYnVpbHQgdW5kZXIgUiB2ZXJzaW9uIDQuMS4zV2FybmluZzogcGFja2FnZSDigJhsdWJyaWRhdGXigJkgd2FzIGJ1aWx0IHVuZGVyIFIgdmVyc2lvbiA0LjEuMy0tIEF0dGFjaGluZyBjb3JlIHRpZHl2ZXJzZSBwYWNrYWdlcyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLSB0aWR5dmVyc2UgMi4wLjAgLS1cbnYgZHBseXIgICAgIDEuMS4wICAgICB2IHJlYWRyICAgICAyLjEuNFxudiBmb3JjYXRzICAgMS4wLjAgICAgIHYgc3RyaW5nciAgIDEuNS4wXG52IGx1YnJpZGF0ZSAxLjkuMiAgICAgdiB0aWJibGUgICAgMy4xLjhcbnYgcHVycnIgICAgIDEuMC4xICAgICB2IHRpZHlyICAgICAxLjMuMC0tIENvbmZsaWN0cyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLSB0aWR5dmVyc2VfY29uZmxpY3RzKCkgLS1cbnggbHVicmlkYXRlOjold2l0aGluJSgpIG1hc2tzIElSYW5nZXM6OiV3aXRoaW4lKClcbnggZHBseXI6OmNvbGxhcHNlKCkgICAgIG1hc2tzIEJpb3N0cmluZ3M6OmNvbGxhcHNlKCksIElSYW5nZXM6OmNvbGxhcHNlKClcbnggZHBseXI6OmNvbWJpbmUoKSAgICAgIG1hc2tzIEJpb2Jhc2U6OmNvbWJpbmUoKSwgQmlvY0dlbmVyaWNzOjpjb21iaW5lKClcbnggcHVycnI6OmNvbXBhY3QoKSAgICAgIG1hc2tzIFhWZWN0b3I6OmNvbXBhY3QoKVxueCBwdXJycjo6Y29tcG9zZSgpICAgICAgbWFza3MgU2hvcnRSZWFkOjpjb21wb3NlKClcbnggZHBseXI6OmNvdW50KCkgICAgICAgIG1hc2tzIG1hdHJpeFN0YXRzOjpjb3VudCgpXG54IGRwbHlyOjpkZXNjKCkgICAgICAgICBtYXNrcyBJUmFuZ2VzOjpkZXNjKClcbnggdGlkeXI6OmV4cGFuZCgpICAgICAgIG1hc2tzIFM0VmVjdG9yczo6ZXhwYW5kKClcbnggZHBseXI6OmZpbHRlcigpICAgICAgIG1hc2tzIHN0YXRzOjpmaWx0ZXIoKVxueCBkcGx5cjo6Zmlyc3QoKSAgICAgICAgbWFza3MgR2Vub21pY0FsaWdubWVudHM6OmZpcnN0KCksIFM0VmVjdG9yczo6Zmlyc3QoKVxueCBkcGx5cjo6aWQoKSAgICAgICAgICAgbWFza3MgU2hvcnRSZWFkOjppZCgpXG54IGRwbHlyOjpsYWcoKSAgICAgICAgICBtYXNrcyBzdGF0czo6bGFnKClcbnggZHBseXI6Omxhc3QoKSAgICAgICAgIG1hc2tzIEdlbm9taWNBbGlnbm1lbnRzOjpsYXN0KClcbnggZ2dwbG90Mjo6UG9zaXRpb24oKSAgIG1hc2tzIEJpb2NHZW5lcmljczo6UG9zaXRpb24oKSwgYmFzZTo6UG9zaXRpb24oKVxueCBwdXJycjo6cmVkdWNlKCkgICAgICAgbWFza3MgR2Vub21pY1Jhbmdlczo6cmVkdWNlKCksIElSYW5nZXM6OnJlZHVjZSgpXG54IGRwbHlyOjpyZW5hbWUoKSAgICAgICBtYXNrcyBTNFZlY3RvcnM6OnJlbmFtZSgpXG54IGx1YnJpZGF0ZTo6c2Vjb25kKCkgICBtYXNrcyBHZW5vbWljQWxpZ25tZW50czo6c2Vjb25kKCksIFM0VmVjdG9yczo6c2Vjb25kKClcbnggbHVicmlkYXRlOjpzZWNvbmQ8LSgpIG1hc2tzIFM0VmVjdG9yczo6c2Vjb25kPC0oKVxueCBkcGx5cjo6c2VsZWN0KCkgICAgICAgbWFza3MgYmlvbWFSdDo6c2VsZWN0KClcbnggZHBseXI6OnNsaWNlKCkgICAgICAgIG1hc2tzIFhWZWN0b3I6OnNsaWNlKCksIElSYW5nZXM6OnNsaWNlKClcbnggdGliYmxlOjp2aWV3KCkgICAgICAgIG1hc2tzIFNob3J0UmVhZDo6dmlldygpXG5pIFVzZSB0aGUgXHUwMDFiXTg7O2h0dHA6Ly9jb25mbGljdGVkLnItbGliLm9yZy9cdTAwMDdjb25mbGljdGVkIHBhY2thZ2VcdTAwMWJdODs7XHUwMDA3IHRvIGZvcmNlIGFsbCBjb25mbGljdHMgdG8gYmVjb21lIGVycm9yc1xuIn0= -->
+<pre><code>Warning: package ‘tidyverse’ was built under R version 4.1.3Warning: package ‘tibble’ was built under R version 4.1.3Warning: package ‘tidyr’ was built under R version 4.1.3Warning: package ‘readr’ was built under R version 4.1.3Warning: package ‘purrr’ was built under R version 4.1.3Warning: package ‘dplyr’ was built under R version 4.1.3Warning: package ‘stringr’ was built under R version 4.1.3Warning: package ‘forcats’ was built under R version 4.1.3Warning: package ‘lubridate’ was built under R version 4.1.3-- Attaching core tidyverse packages ----------------------------------------------------------------------------------------------- tidyverse 2.0.0 --
+v dplyr     1.1.0     v readr     2.1.4
+v forcats   1.0.0     v stringr   1.5.0
+v lubridate 1.9.2     v tibble    3.1.8
+v purrr     1.0.1     v tidyr     1.3.0-- Conflicts ----------------------------------------------------------------------------------------------------------------- tidyverse_conflicts() --
+x lubridate::%within%() masks IRanges::%within%()
+x dplyr::collapse()     masks Biostrings::collapse(), IRanges::collapse()
+x dplyr::combine()      masks Biobase::combine(), BiocGenerics::combine()
+x purrr::compact()      masks XVector::compact()
+x purrr::compose()      masks ShortRead::compose()
+x dplyr::count()        masks matrixStats::count()
+x dplyr::desc()         masks IRanges::desc()
+x tidyr::expand()       masks S4Vectors::expand()
+x dplyr::filter()       masks stats::filter()
+x dplyr::first()        masks GenomicAlignments::first(), S4Vectors::first()
+x dplyr::id()           masks ShortRead::id()
+x dplyr::lag()          masks stats::lag()
+x dplyr::last()         masks GenomicAlignments::last()
+x ggplot2::Position()   masks BiocGenerics::Position(), base::Position()
+x purrr::reduce()       masks GenomicRanges::reduce(), IRanges::reduce()
+x dplyr::rename()       masks S4Vectors::rename()
+x lubridate::second()   masks GenomicAlignments::second(), S4Vectors::second()
+x lubridate::second&lt;-() masks S4Vectors::second&lt;-()
+x dplyr::select()       masks biomaRt::select()
+x dplyr::slice()        masks XVector::slice(), IRanges::slice()
+x tibble::view()        masks ShortRead::view()
+i Use the ]8;;http://conflicted.r-lib.org/conflicted package]8;; to force all conflicts to become errors</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShyY2FydG9jb2xvcilcbmBgYCJ9 -->
+<pre class="r"><code>library(rcartocolor)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiV2FybmluZzogcGFja2FnZSDigJhyY2FydG9jb2xvcuKAmSB3YXMgYnVpbHQgdW5kZXIgUiB2ZXJzaW9uIDQuMS4zXG4ifQ== -->
+<pre><code>Warning: package ‘rcartocolor’ was built under R version 4.1.3</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxudGhlbWVfc2V0KHRoZW1lX3ByaXNtKGJhc2Vfc2l6ZSA9IDE0KSlcbmBgYCJ9 -->
+<pre class="r"><code>theme_set(theme_prism(base_size = 14))</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
@@ -1878,9 +2038,69 @@ plotPCA(data, col = pData$graph_cols, main = &quot;Unnormalized counts&quot;, ce
 differential expression</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuI1ByZXBhcmUgdGhlIERFU0VxMiBvYmplY3RcbnBEYXRhJGdyb3VwIDwtIGZhY3RvcihwYXN0ZTAocERhdGEkZ2Vub3R5cGUscERhdGEkdGltZXBvaW50KSlcbmRkcyA8LSBERVNlcURhdGFTZXRGcm9tTWF0cml4KGNvdW50RGF0YSA9IGNvdW50cyhkYXRhT2Zmc2V0KSxcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNvbERhdGEgPSBwRGF0YSxcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGRlc2lnbiA9IH4gZ3JvdXApXG5gYGAifQ== -->
+<pre class="r"><code>#Prepare the DESEq2 object
+pData$group &lt;- factor(paste0(pData$genotype,pData$timepoint))
+dds &lt;- DESeqDataSetFromMatrix(countData = counts(dataOffset),
+                              colData = pData,
+                              design = ~ group)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiY29udmVydGluZyBjb3VudHMgdG8gaW50ZWdlciBtb2RlXG4ifQ== -->
+<pre><code>converting counts to integer mode</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZGRzJGdyb3VwIDwtIHJlbGV2ZWwoZGRzJGdyb3VwLCByZWY9IFwiVUk5XCIpXG5ub3JtRmFjdG9ycyA8LSBleHAoLTEgKiBvZmZzdChkYXRhT2Zmc2V0KSlcbm5vcm1GYWN0b3JzIDwtIG5vcm1GYWN0b3JzIC8gZXhwKHJvd01lYW5zKGxvZyhub3JtRmFjdG9ycykpKVxubm9ybWFsaXphdGlvbkZhY3RvcnMoZGRzKSA8LSBub3JtRmFjdG9yc1xuI1BlcmZvcm0gdGhlIERFU0VxMiBhbmFseXNpc1xuZGRzIDwtIERFU2VxKGRkcylcbmBgYCJ9 -->
+<pre class="r"><code>dds$group &lt;- relevel(dds$group, ref= &quot;UI9&quot;)
+normFactors &lt;- exp(-1 * offst(dataOffset))
+normFactors &lt;- normFactors / exp(rowMeans(log(normFactors)))
+normalizationFactors(dds) &lt;- normFactors
+#Perform the DESEq2 analysis
+dds &lt;- DESeq(dds)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoidXNpbmcgcHJlLWV4aXN0aW5nIG5vcm1hbGl6YXRpb24gZmFjdG9yc1xuZXN0aW1hdGluZyBkaXNwZXJzaW9uc1xuZ2VuZS13aXNlIGRpc3BlcnNpb24gZXN0aW1hdGVzXG5tZWFuLWRpc3BlcnNpb24gcmVsYXRpb25zaGlwXG5maW5hbCBkaXNwZXJzaW9uIGVzdGltYXRlc1xuZml0dGluZyBtb2RlbCBhbmQgdGVzdGluZ1xuIn0= -->
+<pre><code>using pre-existing normalization factors
+estimating dispersions
+gene-wise dispersion estimates
+mean-dispersion relationship
+final dispersion estimates
+fitting model and testing</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucmxkIDwtIHZhcmlhbmNlU3RhYmlsaXppbmdUcmFuc2Zvcm1hdGlvbihkZHMpXG5cbm5vcm1hbF9QQ0EgPC0gcGxvdFBDQShybGQsIHJldHVybkRhdGEgPSBULCBpbnRncm91cCA9IFwiZ3JvdXBcIilcbiNQbG90IHRoZSBQQ0EgZ3JhcGhzIG9mIHRoZSBub3JtYWxpemVkIGNvdW50c1xuI3BuZyhoZXJlOjpoZXJlKFwibG9uZ19pbmZlY3Rpb25faHVtYW5fcmVhZHMvbWlSTkFfbGlicmFyeS9yZXN1bHRzL2ZpbmFsIGNsZWFuIGZpZ3VyZXMvUENBIHBsb3Qgb2Ygbm9ybWFsaXplZCBjb3VudHMgbGVnZW5kIGJvdHRvbS5wbmdcIiksIHdpZHRoID0gNiwgaGVpZ2h0ID0gNSwgdW5pdHMgPSBcImluXCIsIHJlcyA9IDEwODApXG5ub3JtYWxfUENBIDwtIERFU2VxMjo6cGxvdFBDQShybGQsIHJldHVybkRhdGEgPSBULCBpbnRncm91cCA9IFwiZ3JvdXBcIikgJT4lIFxuICBtdXRhdGUoZ2Vub3R5cGUgPSBzdHJfcmVtb3ZlKGdyb3VwLCBcIls6ZGlnaXQ6XStcIikpICU+JSBcbiAgbXV0YXRlKGdlbm90eXBlID0gZmN0X3JlbGV2ZWwoZ2Vub3R5cGUsIFwiVUlcIiwgXCJXVFwiLCBcIk5cIikpXG4jUHJpbnQgdGhlIFBDQSBwbG90IG91dFxucGNhX3Bsb3QgPC0gZ2dwbG90KGRhdGEgPSBub3JtYWxfUENBLCBhZXMoeCA9IFBDMSwgeSA9IFBDMiwgc2hhcGUgPSBnZW5vdHlwZSwgY29sb3IgPSBnZW5vdHlwZSkpICtcbiAgc2NhbGVfY29sb3JfbWFudWFsKGxhYmVscyA9IGMoXCJOXCIgPSBleHByZXNzaW9uKERlbHRhKml0YWxpYyhcImVzY05cIikpLFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBcIldUXCIgPSBcIldUXCIsIFwiVUlcIiA9IFwiVW5pbmZlY3RlZFwiKSxcbiAgICAgICAgICAgICAgICAgICAgIHZhbHVlcyA9IGMoXCJVSVwiID0gY2FydG9fcGFsKDEyLGRpc2NyZXRlX3BhbF9jaG9pY2UpIFsxMF0sXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFwiV1RcIiA9IGNhcnRvX3BhbCgxMixkaXNjcmV0ZV9wYWxfY2hvaWNlKSBbMl0sIFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBcIk5cIiA9IGNhcnRvX3BhbCgxMixkaXNjcmV0ZV9wYWxfY2hvaWNlKSBbMV0pKSArXG4gIGdlb21fcG9pbnQoc2l6ZSA9IDYpICtcbiAgbGFicyhzaGFwZSA9IFwiSW5mZWN0aW9uIFN0YXR1c1wiLCBjb2xvciA9IFwiSW5mZWN0aW9uIFN0YXR1c1wiLFxuICAgICAgIHggPSBcIlBDMTogODglIHZhcmlhbmNlXCIsIHkgPSBcIlBDMjogNiUgdmFyaWFuY2VcIikgK1xuICBzY2FsZV9zaGFwZV9tYW51YWwobGFiZWxzID0gYyhcIk5cIiA9IGV4cHJlc3Npb24oRGVsdGEqaXRhbGljKFwiZXNjTlwiKSksXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFwiV1RcIiA9IFwiV1RcIiwgXCJVSVwiID0gXCJVbmluZmVjdGVkXCIpLFxuICAgICAgICAgICAgICAgICAgICAgdmFsdWVzID0gYyhcIlVJXCIgPSAxNSwgXCJXVFwiID0gMTYsIFwiTlwiID0gMTcpKSArXG4gIHRoZW1lX3ByaXNtKGJhc2Vfc2l6ZSA9IDE4KSArXG4gIHRoZW1lKGxlZ2VuZC50aXRsZSA9IGVsZW1lbnRfdGV4dCgpKSArXG4gIHRoZW1lKGxlZ2VuZC50aXRsZSA9IGVsZW1lbnRfdGV4dCgpLFxuICAgICAgICBsZWdlbmQudGV4dC5hbGlnbiA9IDAsXG4gICAgICAgIGF4aXMudGV4dCA9IGVsZW1lbnRfdGV4dChzaXplID0gMTkpKVxuXG5wY2FfcGxvdFxuYGBgIn0= -->
+<pre class="r"><code>rld &lt;- varianceStabilizingTransformation(dds)
+
+normal_PCA &lt;- plotPCA(rld, returnData = T, intgroup = &quot;group&quot;)
+#Plot the PCA graphs of the normalized counts
+#png(here::here(&quot;long_infection_human_reads/miRNA_library/results/final clean figures/PCA plot of normalized counts legend bottom.png&quot;), width = 6, height = 5, units = &quot;in&quot;, res = 1080)
+normal_PCA &lt;- DESeq2::plotPCA(rld, returnData = T, intgroup = &quot;group&quot;) %&gt;% 
+  mutate(genotype = str_remove(group, &quot;[:digit:]+&quot;)) %&gt;% 
+  mutate(genotype = fct_relevel(genotype, &quot;UI&quot;, &quot;WT&quot;, &quot;N&quot;))
+#Print the PCA plot out
+pca_plot &lt;- ggplot(data = normal_PCA, aes(x = PC1, y = PC2, shape = genotype, color = genotype)) +
+  scale_color_manual(labels = c(&quot;N&quot; = expression(Delta*italic(&quot;escN&quot;)),
+                                &quot;WT&quot; = &quot;WT&quot;, &quot;UI&quot; = &quot;Uninfected&quot;),
+                     values = c(&quot;UI&quot; = carto_pal(12,discrete_pal_choice) [10],
+                                &quot;WT&quot; = carto_pal(12,discrete_pal_choice) [2], 
+                                &quot;N&quot; = carto_pal(12,discrete_pal_choice) [1])) +
+  geom_point(size = 6) +
+  labs(shape = &quot;Infection Status&quot;, color = &quot;Infection Status&quot;,
+       x = &quot;PC1: 88% variance&quot;, y = &quot;PC2: 6% variance&quot;) +
+  scale_shape_manual(labels = c(&quot;N&quot; = expression(Delta*italic(&quot;escN&quot;)),
+                                &quot;WT&quot; = &quot;WT&quot;, &quot;UI&quot; = &quot;Uninfected&quot;),
+                     values = c(&quot;UI&quot; = 15, &quot;WT&quot; = 16, &quot;N&quot; = 17)) +
+  theme_prism(base_size = 18) +
+  theme(legend.title = element_text()) +
+  theme(legend.title = element_text(),
+        legend.text.align = 0,
+        axis.text = element_text(size = 19))
+
+pca_plot</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-plot-begin eyJoZWlnaHQiOjQzMi42MzI5LCJ3aWR0aCI6NzAwLCJzaXplX2JlaGF2aW9yIjowLCJjb25kaXRpb25zIjpbXX0= -->
 <p><img src="data:image/png;base64,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" /></p>
 <!-- rnb-plot-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuI2dnc2F2ZShoZXJlOjpoZXJlKHN0cl9jKHJlc19wYXRoLFwiUENBIHBsb3Qgb2Ygbm9ybWFsaXplZCBjb3VudHMucG5nXCIpKSwgcGNhX3Bsb3QsIHdpZHRoID0gNywgaGVpZ2h0ID0gNSwgZHBpID0gMTA4MClcbiNnZ3NhdmUoaGVyZTo6aGVyZShzdHJfYyhyZXNfcGF0aCxcIlBDQSBwbG90IG9mIG5vcm1hbGl6ZWQgY291bnRzLnN2Z1wiKSksIHBjYV9wbG90LCB3aWR0aCA9IDcsIGhlaWdodCA9IDUpXG5gYGAifQ== -->
+<pre class="r"><code>#ggsave(here::here(str_c(res_path,&quot;PCA plot of normalized counts.png&quot;)), pca_plot, width = 7, height = 5, dpi = 1080)
+#ggsave(here::here(str_c(res_path,&quot;PCA plot of normalized counts.svg&quot;)), pca_plot, width = 7, height = 5)</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <p>Identify differentially expressed genes</p>

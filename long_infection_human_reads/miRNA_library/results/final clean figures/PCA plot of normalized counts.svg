@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' class='svglite' width='504.00pt' height='360.00pt' viewBox='0 0 504.00 360.00'>
+<defs>
+  <style type='text/css'><![CDATA[
+    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite rect, .svglite circle {
+      fill: none;
+      stroke: #000000;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-miterlimit: 10.00;
+    }
+    .svglite text {
+      white-space: pre;
+    }
+  ]]></style>
+</defs>
+<rect width='100%' height='100%' style='stroke: none; fill: #FFFFFF;'/>
+<defs>
+  <clipPath id='cpMC4wMHw1MDQuMDB8MC4wMHwzNjAuMDA='>
+    <rect x='0.00' y='0.00' width='504.00' height='360.00' />
+  </clipPath>
+</defs>
+<g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwzNjAuMDA=)'>
+<rect x='0.00' y='0.00' width='504.00' height='360.00' style='stroke-width: 2.74; stroke: none; fill: #FFFFFF;' />
+</g>
+<defs>
+  <clipPath id='cpNjIuNzJ8MzI0LjE1fDguOTd8Mjk1LjIy'>
+    <rect x='62.72' y='8.97' width='261.43' height='286.25' />
+  </clipPath>
+</defs>
+<g clip-path='url(#cpNjIuNzJ8MzI0LjE1fDguOTd8Mjk1LjIy)'>
+<rect x='62.72' y='8.97' width='261.43' height='286.25' style='stroke-width: 2.74; stroke: none;' />
+<polygon points='113.14,28.73 126.65,28.73 126.65,15.22 113.14,15.22 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
+<polygon points='116.94,35.54 130.45,35.54 130.45,22.03 116.94,22.03 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
+<polygon points='129.91,30.84 143.42,30.84 143.42,17.33 129.91,17.33 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
+<polygon points='312.27,111.29 321.37,127.05 303.17,127.05 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
+<polygon points='140.28,110.87 149.38,126.63 131.18,126.63 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
+<circle cx='74.60' cy='282.21' r='6.76' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
+<circle cx='197.44' cy='210.49' r='6.76' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
+<circle cx='159.90' cy='188.56' r='6.76' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
+<polygon points='178.65,151.02 187.75,166.78 169.56,166.78 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
+</g>
+<g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwzNjAuMDA=)'>
+<polyline points='62.72,295.22 62.72,8.97 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<text x='53.31' y='299.84' text-anchor='end' style='font-size: 19.00px; font-weight: bold; font-family: "Arial";' textLength='16.90px' lengthAdjust='spacingAndGlyphs'>-6</text>
+<text x='53.31' y='245.16' text-anchor='end' style='font-size: 19.00px; font-weight: bold; font-family: "Arial";' textLength='16.90px' lengthAdjust='spacingAndGlyphs'>-4</text>
+<text x='53.31' y='190.47' text-anchor='end' style='font-size: 19.00px; font-weight: bold; font-family: "Arial";' textLength='16.90px' lengthAdjust='spacingAndGlyphs'>-2</text>
+<text x='53.31' y='135.78' text-anchor='end' style='font-size: 19.00px; font-weight: bold; font-family: "Arial";' textLength='10.57px' lengthAdjust='spacingAndGlyphs'>0</text>
+<text x='53.31' y='81.09' text-anchor='end' style='font-size: 19.00px; font-weight: bold; font-family: "Arial";' textLength='10.57px' lengthAdjust='spacingAndGlyphs'>2</text>
+<text x='53.31' y='26.41' text-anchor='end' style='font-size: 19.00px; font-weight: bold; font-family: "Arial";' textLength='10.57px' lengthAdjust='spacingAndGlyphs'>4</text>
+<polyline points='55.55,293.04 62.72,293.04 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<polyline points='55.55,238.35 62.72,238.35 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<polyline points='55.55,183.67 62.72,183.67 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<polyline points='55.55,128.98 62.72,128.98 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<polyline points='55.55,74.29 62.72,74.29 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<polyline points='55.55,19.60 62.72,19.60 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<polyline points='62.72,295.22 324.15,295.22 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<polyline points='78.43,302.39 78.43,295.22 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<polyline points='160.38,302.39 160.38,295.22 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<polyline points='242.33,302.39 242.33,295.22 ' style='stroke-width: 2.74; stroke-linecap: square;' />
+<text x='78.43' y='321.59' text-anchor='middle' style='font-size: 19.00px; font-weight: bold; font-family: "Arial";' textLength='16.90px' lengthAdjust='spacingAndGlyphs'>-5</text>
+<text x='160.38' y='321.59' text-anchor='middle' style='font-size: 19.00px; font-weight: bold; font-family: "Arial";' textLength='10.57px' lengthAdjust='spacingAndGlyphs'>0</text>
+<text x='242.33' y='321.59' text-anchor='middle' style='font-size: 19.00px; font-weight: bold; font-family: "Arial";' textLength='10.57px' lengthAdjust='spacingAndGlyphs'>5</text>
+<text x='193.44' y='347.24' text-anchor='middle' style='font-size: 18.00px; font-weight: bold; font-family: "Arial";' textLength='160.08px' lengthAdjust='spacingAndGlyphs'>PC1: 88% variance</text>
+<text transform='translate(21.85,152.09) rotate(-90)' text-anchor='middle' style='font-size: 18.00px; font-weight: bold; font-family: "Arial";' textLength='150.07px' lengthAdjust='spacingAndGlyphs'>PC2: 6% variance</text>
+<text x='418.56' y='128.13' text-anchor='middle' style='font-size: 18.00px; font-weight: bold; font-family: "Arial";' textLength='135.01px' lengthAdjust='spacingAndGlyphs'>Infection Status</text>
+<polygon points='360.44,154.39 373.95,154.39 373.95,140.88 360.44,140.88 ' style='stroke-width: 0.71; stroke: none; fill: #F97B72;' />
+<circle cx='367.19' cy='164.92' r='6.76' style='stroke-width: 0.71; stroke: none; fill: #11A579;' />
+<polygon points='367.19,171.69 376.29,187.45 358.09,187.45 ' style='stroke-width: 0.71; stroke: none; fill: #7F3C8D;' />
+<text x='392.30' y='152.79' style='font-size: 14.40px; font-family: "Arial";' textLength='68.82px' lengthAdjust='spacingAndGlyphs'>Uninfected</text>
+<text x='392.30' y='170.07' style='font-size: 14.40px; font-family: "Arial";' textLength='22.38px' lengthAdjust='spacingAndGlyphs'>WT</text>
+<text x='392.30' y='187.27' style='font-size: 14.40px; font-family: "Arial";' textLength='9.27px' lengthAdjust='spacingAndGlyphs'>Δ</text>
+<text x='401.57' y='187.27' style='font-size: 14.40px; font-style: italic; font-family: "Arial";' textLength='32.80px' lengthAdjust='spacingAndGlyphs'>escN</text>
+</g>
+</svg>
