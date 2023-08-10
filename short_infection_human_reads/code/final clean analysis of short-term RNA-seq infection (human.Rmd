@@ -200,16 +200,17 @@ pca_plot <- ggplot(data = normal_PCA, aes(shape = genotype)) +
   scale_color_manual(values = chosen_cont_colors,breaks = c(0,45,90,180)) +
   #scale_color_carto_c(palette = cont_pal_choice, breaks = c(0,45,90,180)) +
   geom_point(mapping = aes(x = PC1, y = PC2, color = factor(timepoint)), size = 5) +
-  labs(title = "EDAseq normalized DESeq2 PCA plot \nnot including the outlier",
-       x = "PC1: 39% Variance",
+  labs(x = "PC1: 39% Variance",
        y = "PC2: 21% Variance") +
   guides(color = guide_legend(title = "Time of Infection (min)"),
          shape = guide_legend(title = "Infection Status")) +
   scale_shape_manual(labels = c("WT" = "WT",
                                 "N" = expression(Delta*italic("escN"))),
               values = c("Uninfected" = 15, "WT" = 16, "N" = 17)) +
+  theme_prism(base_size = 18) +
   theme(legend.title = element_text(),
-        legend.text.align = 0)
+        legend.text.align = 0,
+        axis.text = element_text(size = 19))
 pca_plot
 #ggsave(here::here(str_c(res_path,"PCA plot of normalized counts.png")), pca_plot, width = 7, height = 5, dpi = 1080)
 #ggsave(here::here(str_c(res_path,"PCA plot of normalized counts.svg")), pca_plot, width = 7, height = 5)
