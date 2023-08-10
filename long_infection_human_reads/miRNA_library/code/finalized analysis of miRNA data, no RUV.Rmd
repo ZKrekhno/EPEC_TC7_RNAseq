@@ -33,6 +33,9 @@ cont_pal_choice <- "BluYl"
 diverg_pal_choice <- "Geyser"
 #Helper functions
 calc_relative <- function(x) x/sum(x) * 100
+#Set up paths for data, and results
+data_path <- "long_infection_human_reads/miRNA_library/data/"
+res_path <- "long_infection_human_reads/miRNA_library/results/final clean figures/"
 ```
 
 Prepare the data for analysis
@@ -105,20 +108,31 @@ rld <- varianceStabilizingTransformation(dds)
 normal_PCA <- plotPCA(rld, returnData = T, intgroup = "group")
 #Plot the PCA graphs of the normalized counts
 #png(here::here("long_infection_human_reads/miRNA_library/results/final clean figures/PCA plot of normalized counts legend bottom.png"), width = 6, height = 5, units = "in", res = 1080)
-ggplot(data = normal_PCA, aes(shape = pData$genotype, color = pData$genotype)) +
-  scale_color_manual(labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
-                                "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
+normal_PCA <- DESeq2::plotPCA(rld, returnData = T, intgroup = "group") %>% 
+  mutate(genotype = str_remove(group, "[:digit:]+")) %>% 
+  mutate(genotype = fct_relevel(genotype, "UI", "WT", "N"))
+#Print the PCA plot out
+pca_plot <- ggplot(data = normal_PCA, aes(x = PC1, y = PC2, shape = genotype, color = genotype)) +
+  scale_color_manual(labels = c("N" = expression(Delta*italic("escN")),
+                                "WT" = "WT", "UI" = "Uninfected"),
                      values = c("UI" = carto_pal(12,discrete_pal_choice) [10],
                                 "WT" = carto_pal(12,discrete_pal_choice) [2], 
                                 "N" = carto_pal(12,discrete_pal_choice) [1])) +
-  geom_point(mapping = aes(x = PC1, y = PC2), size = 5) +
-  labs(title = "EDAseq-norm PCA plot", shape = "Infection", color = "Infection",
-       x = "PC1: 33% variance", y = "PC2: 22% variance") +
-  scale_shape_manual(labels = c("N" = paste0(greeks("Delta"),"EscN EPEC"),
-                                "WT" = "Wild-type EPEC", "UI" = "Uninfected"),
+  geom_point(size = 6) +
+  labs(shape = "Infection Status", color = "Infection Status",
+       x = "PC1: 88% variance", y = "PC2: 6% variance") +
+  scale_shape_manual(labels = c("N" = expression(Delta*italic("escN")),
+                                "WT" = "WT", "UI" = "Uninfected"),
                      values = c("UI" = 15, "WT" = 16, "N" = 17)) +
-  theme(legend.position = "bottom", legend.title = element_text())
-#dev.off()
+  theme_prism(base_size = 18) +
+  theme(legend.title = element_text()) +
+  theme(legend.title = element_text(),
+        legend.text.align = 0,
+        axis.text = element_text(size = 19))
+
+pca_plot
+#ggsave(here::here(str_c(res_path,"PCA plot of normalized counts.png")), pca_plot, width = 7, height = 5, dpi = 1080)
+#ggsave(here::here(str_c(res_path,"PCA plot of normalized counts.svg")), pca_plot, width = 7, height = 5)
 ```
 
 Identify differentially expressed genes
