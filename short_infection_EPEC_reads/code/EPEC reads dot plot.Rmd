@@ -63,6 +63,31 @@ gse_counts %>%
                        axis.text.y = element_text(color = "black")) 
   ))
 #dev.off()
-
 ```
+```{r combine_time_gsea_plots, fig.width=9, fig.height=5}
+gse_df <- gse_counts %>% 
+  keep(str_detect(names(.), "Time")) %>% 
+  imap(~mutate(.x, Time = .y)) %>% 
+  reduce(bind_rows) %>% 
+  mutate(Time = str_extract(Time, "[:digit:]+"),
+         Time = fct_relevel(Time, "45","90"))
+gsea_plot <- ggplot(gse_df, aes(x = NES, y = fct_reorder(Description,NES), 
+                                color = p.adjust)) +
+  geom_point(aes(size = Count)) + 
+  scale_color_gradient(low  = chosen_cont_colors [4], high = chosen_cont_colors [1], name = "Adjusted p-value",
+                       limits = c(0,0.035), breaks = c(0.01, 0.02, 0.03)) +
+  scale_size(range = c(5,10)) +
+  labs(y = element_blank()) +
+  #geom_vline(xintercept = 0, linewidth = 1.2, linetype = "longdash", color = "grey50") +
+  #geom_segment(aes(x = 0, xend = NES, yend = fct_reorder(Description,NES)), linewidth = 1.8) +
+  coord_cartesian(clip = "off", xlim = c(min(gse_df$NES)-0.4, max(gse_df$NES)+0.3)) + 
+  theme(axis.text.x = element_text(color = "black"),
+        axis.text.y = element_text(color = "black")) +
+  facet_wrap(~Time, nrow = 1) + 
+  theme(axis.text.x = element_text(size = 15))
+gsea_plot
+#ggsave(here::here(str_c(res_path,"Functional profiling dotplots better colors.png")), gsea_plot, width = 9, height = 5, dpi = 1080)
+#ggsave(here::here(str_c(res_path,"Functional profiling dotplots better colors.svg")), gsea_plot, width = 9, height = 5)
+```
+
 
