@@ -422,27 +422,29 @@ color_scheme <- colorRampPalette(mycolors) (pal_length)
 #For some reason fct_recode did not want to work the delta sign, so had to work around it
 df <- as.data.frame(colData(rld)) %>% 
   dplyr::select(genotype) %>% 
-  transmute(`Infection status` = fct_recode(genotype, "T3SS-deficient EPEC" = "N",
-                                            "Wild-type EPEC" = "WT","Uninfected" = "UI")) 
+  transmute(`Infection Status` = fct_recode(genotype, "Mutant" = "N",
+                                            "WT" = "WT","Uninfected" = "UI")) 
+#svg(here::here(str_c(res_path, "top 100 DE heatmap.svg")), width = 8, height = 6)
 pheatmap(mat, annotation_col=df, 
-         annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
-                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
-                                                         "Uninfected" = carto_pal(12,discrete_pal_choice) [10])),
+         annotation_colors = list("Infection Status" = c("Uninfected" = carto_pal(12,discrete_pal_choice) [10],
+                                                         "WT" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "Mutant" = carto_pal(12,discrete_pal_choice) [1])),
          fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
          show_rownames = F, show_colnames = F, border_color = NA,
          color = color_scheme)
+#dev.off()
 ```
 
 
 ```{r heatmap-save, eval=FALSE, fig.width=8, fig.height=6}
 pheatmap(mat, annotation_col=df, 
-         annotation_colors = list("Infection status" = c("Wild-type EPEC" =carto_pal(12,discrete_pal_choice) [2],
-                                                         "T3SS-deficient EPEC" = carto_pal(12,discrete_pal_choice) [1],
-                                                         "Uninfected" = carto_pal(12,discrete_pal_choice) [10])),
+         annotation_colors = list("Infection Status" = c("Uninfected" = carto_pal(12,discrete_pal_choice) [10],
+                                                         "WT" =carto_pal(12,discrete_pal_choice) [2],
+                                                         "Mutant" = carto_pal(12,discrete_pal_choice) [1])),
          fontsize = 11, treeheight_row = 0, treeheight_col = 10, breaks = mybreaks,
          show_rownames = F, show_colnames = F, border_color = NA,
          color = color_scheme,
-         filename = here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/top 100 DE heatmap.png"),
+         filename = here::here(str_c(res_path, "top 100 DE heatmap.png")),
          width = 8, height = 6)
 ```
 
@@ -596,6 +598,7 @@ gsa.tf <-  egsea.cnt(counts = cnt_obj_filt, group = group_obj, design = design_m
                     report.dir = here::here("long_infection_human_reads/long_RNA_library/results/final clean figures/all comparisons MSIGDB TF"),
                     verbose = T, display.top = 35)
 ```
+
 ```{r egsea-msig-mir, eval=FALSE}
 #Build gene set collection
 gs.annots.mir <-  buildGMTIdx(geneIDs = rownames(cnt_obj_filt), species = "Human", 
