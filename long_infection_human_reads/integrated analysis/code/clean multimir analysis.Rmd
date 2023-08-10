@@ -81,6 +81,14 @@ plot(fit1,
      labels = list(fontsize = 20),
      quantities = list(fontsize = 24))
 #dev.off()
+#png(here::here("long_infection_human_reads/integrated analysis/results/Venn diagrams of shared differentially expressed miRNA no label.png"),
+      # width = 7, height = 5, units = "in", res = 1080)
+plot(fit1, 
+     fills = list(fill = c("red","green","blue"),
+                  alpha = 0.5),
+     labels = NULL,
+     quantities = list(fontsize = 24))
+#dev.off()
 ```
 
 From this it is evident, that DE miRNA are quite different across conditions WtvsUI and EscNvsUI, so let's investigate why they don't show up as WTvsEscN
