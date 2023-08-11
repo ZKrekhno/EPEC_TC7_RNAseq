@@ -605,7 +605,7 @@ ggplot(dplyr::slice(gsets,1:15),
 #dev.off()
 ```
 
-```{r egsea-msigdb-h, eval=FALSE, fig.width=8, fig.height=6, eval=FALSE}
+```{r egsea-msigdb-h, eval=FALSE, fig.width=8, fig.height=6}
 #Move onto EGSEA analysis with hallmark gene sets
 
 #Build gene set collection
@@ -707,6 +707,13 @@ ggplot(gsets_h_filt, aes(x = factor(Time), y = GeneSet)) +
 #ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways.png")), width = 8, height = 5, dpi = 1080)
 #ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways.svg")), width = 8, height = 5)
 
+gsets_h_add_missing <- gsets_h_add_missing %>% 
+  mutate(Strain_label = factor(Strain, levels = c("Wild-type EPEC","T3SS-deficient EPEC"),
+                               ordered = T, 
+                               labels = c(expression(bold("WT")),
+                                          expression(bold(Delta)*bolditalic("escN"))
+                                          )))
+
 ggplot(gsets_h_add_missing, aes(x = factor(Time), y = GeneSet)) +
   geom_tile(aes(fill = direction), color = "black", alpha = 1) + 
   scale_shape_manual(values = set_names(c(24,25), nm = c("1","-1"))) +
@@ -720,11 +727,12 @@ ggplot(gsets_h_add_missing, aes(x = factor(Time), y = GeneSet)) +
                                "1" = carto_pal(2, diverg_pal_choice) [2]),
                     labels = c("-1" = "Down-regulated","1" = "Up-regulated"),
                     na.value = "grey80") +
-  labs(x = "Time of Infection (min)", y = element_blank(), fill = "Regulation direction") +
-  facet_wrap(~Strain, ncol = 2)
+  labs(x = "Time of Infection (min)", y = element_blank(), fill = "Regulation Direction") +
+  facet_wrap(~Strain_label, ncol = 2, labeller = label_parsed) +
+  theme(axis.text.x = element_text(size = 13),
+        legend.text = element_text(size = 13))
 #ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways with grey for missing.png")), width = 8, height = 5, dpi = 1080)
 #ggsave(here::here(str_c(res_path,"egsea all top Hallmark pathways  with grey for missing.svg")), width = 8, height = 5)
-    
 ```
 
 
