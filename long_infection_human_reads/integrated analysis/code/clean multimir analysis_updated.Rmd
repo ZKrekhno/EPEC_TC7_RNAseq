@@ -1,0 +1,327 @@
+---
+title: "Combined analysis of miRNAseq and RUVs-corrected stranded library"
+output: 
+  html_notebook: 
+    fig_width: 6
+    fig_height: 5
+editor_options: 
+  chunk_output_type: inline
+---
+```{r lib, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(include = TRUE)
+knitr::opts_chunk$set(fig.width = 6)
+knitr::opts_chunk$set(fig.height = 5)
+library(greekLetters)
+library(multiMiR)
+library('org.Hs.eg.db')
+library(biomaRt)
+library(clusterProfiler)
+library(enrichplot)
+library(eulerr)
+library(tidyverse)
+library(ggprism)
+library(rcartocolor)
+library(psych)
+```
+Define all helper functions and color choices
+```{r helper, include=TRUE}
+theme_set(theme_prism(base_size = 14))
+#Set color choices from CARTOcolors
+discrete_pal_choice <- "Bold"
+cont_pal_choice <- "BluYl"
+diverg_pal_choice <- "Geyser"
+#Set color vectors
+cont_colors <- carto_pal(name = cont_pal_choice)
+chosen_cont_colors <- cont_colors [c(2,4,6,7)]
+#Helper functions
+calc_relative <- function(x) x/sum(x) * 100
+```
+
+The next step is to perform multimir analysis on the mRNA and miRNA data - identify potential regulation of mRNA by miRNA.
+Read in tables of differential expression results and extract DE genes.
+```{r multimir-prep-1}
+mi_res <- read.csv(here::here("long_infection_human_reads/integrated analysis/data/mirna_normalized results.csv"), header = T)
+#Select just the upregulated and downregulated miRNA
+mi_filt_up <- mi_res %>% 
+  filter(padj.WTvsN < 0.05 & log2FoldChange.WTvsN > 0) %>% 
+  mutate(comb_name = str_c(Mature.miRNA,Precursor.miRNA, sep = "_"))
+mi_filt_down <- mi_res %>% 
+  filter(padj.WTvsN < 0.05 & log2FoldChange.WTvsN < 0) %>% 
+  mutate(comb_name = str_c(Mature.miRNA,Precursor.miRNA, sep = "_"))
+#Add mir-212-3p and mir-423-5p as downregulated, because they are very close to interest - p < 0.1 for NvsUI
+mi_filt_interest <- mi_res %>% 
+  filter(Mature.miRNA %in% c("hsa-miR-423-5p","hsa-miR-212-3p")) %>% 
+  mutate(comb_name = str_c(Mature.miRNA,Precursor.miRNA, sep = "_"))
+#identify miRNA that are not officially differentially expressed, but don't appear in both WTvsUI and NvsUI comparisons
+wt_de_mirna <- mi_res %>% 
+  filter(padj.WTvsUI < 0.05) %>% 
+  mutate(comb_name = str_c(Mature.miRNA,Precursor.miRNA, sep = "_"))
+n_de_mirna <- mi_res %>% 
+  filter(padj.NvsUI < 0.05) %>% 
+  mutate(comb_name = str_c(Mature.miRNA,Precursor.miRNA, sep = "_"))
+```
+
+Visualize DE miRNA across all comparisons
+```{r venns, fig.width=7, fig.height=5}
+de_mirna <- list(`WT vs EscN` = mi_filt_up$Mature.miRNA, 
+                 `WT vs UI` = wt_de_mirna$Mature.miRNA, 
+                 `EscN vs UI` = n_de_mirna$Mature.miRNA) %>% 
+  map(str_remove,"hsa-miR-")
+fit1 <- euler(de_mirna)
+#png(here::here("long_infection_human_reads/integrated analysis/results/Venn diagrams of shared differentially expressed miRNA.png"),
+ #      width = 7, height = 5, units = "in", res = 1080)
+plot(fit1, 
+     fills = list(fill = c("red","green","blue"),
+                  alpha = 0.5),
+     labels = list(fontsize = 20),
+     quantities = list(fontsize = 24))
+#dev.off()
+#svg(here::here("long_infection_human_reads/integrated analysis/results/Venn diagrams of shared differentially expressed miRNA.svg"),
+    #   width = 7, height = 5)
+plot(fit1, 
+     fills = list(fill = c("red","green","blue"),
+                  alpha = 0.5),
+     labels = list(fontsize = 20),
+     quantities = list(fontsize = 24))
+#dev.off()
+#png(here::here("long_infection_human_reads/integrated analysis/results/Venn diagrams of shared differentially expressed miRNA no label.png"),
+      # width = 7, height = 5, units = "in", res = 1080)
+plot(fit1, 
+     fills = list(fill = c("red","green","blue"),
+                  alpha = 0.5),
+     labels = NULL,
+     quantities = list(fontsize = 24))
+#dev.off()
+```
+
+
+
+So I think, it is reasonable to select miRNA that are not shared between WTvsUI and EscNvsUI comparisons even though they don't pass FDR to be officially. Only choose the miRNA that have a reasonable log2fold change between WT and EscN - lfc of 0.4 (change of 1.3)
+```{r choose-top}
+de_mirna_choice <- bind_rows(mi_filt_up,wt_de_mirna,n_de_mirna,mi_filt_interest) %>% 
+  distinct(Mature.miRNA, .keep_all = T)  
+#Create a vector to contain all chosen miRNA
+mirna_to_keep <- vector(mode ="character", length = nrow(de_mirna_choice))
+j <- 1
+#Populate the vector with chosen miRNA
+for (i in 1:nrow(de_mirna_choice)) {
+  if (de_mirna_choice$padj.WTvsN [i] < 0.05) {
+   mirna_to_keep [j] <- de_mirna_choice$Mature.miRNA [i] 
+   j <- j+1
+  } else if (abs(de_mirna_choice$log2FoldChange.WTvsN) [i] >= 0.4) {
+    mirna_to_keep [j] <- de_mirna_choice$Mature.miRNA [i] 
+   j <- j+1
+  }
+}
+#Get the top up and down regulated miRNA from the chosen vector
+mi_filt_up <- de_mirna_choice %>% 
+  filter(Mature.miRNA %in% mirna_to_keep & log2FoldChange.WTvsN > 0)
+top_miRNA_up <- mi_filt_up$Mature.miRNA
+mi_filt_down <- de_mirna_choice %>% 
+  filter(Mature.miRNA %in% mirna_to_keep & log2FoldChange.WTvsN < 0)
+top_miRNA_down <- mi_filt_down$Mature.miRNA
+
+
+```
+
+Next step is to prepare DE mRNA from WTvsN condition and perform multimiR analysis. Selecting DE with looser parameters to capture more potential relationships.
+
+```{r multimir-prep}
+#Select just the upregulated and downregulated mRNA
+m_res <- read.csv(here::here("long_infection_human_reads/integrated analysis/data/RUVs normalized results.csv"), header = T) 
+m_filt_up <- m_res %>% 
+  filter(padj.WTvsN < 0.05 & log2FoldChange.WTvsN > 0) 
+top_mRNA_up <- str_remove(m_filt_up$Gene.ID,"\\.[1-9]([0-9])?") 
+m_filt_down <- m_res %>% 
+  filter(padj.WTvsN < 0.05 & log2FoldChange.WTvsN < 0) 
+top_mRNA_down <- m_filt_down$Gene.ID %>% str_remove("\\.[1-9]([0-9])?") 
+```
+
+Run network analysis without separating up and down regulated genes
+
+```{r combined-search}
+mlt_int <- get_multimir(org     = "hsa",
+                         mirna   = c(top_miRNA_up, top_miRNA_down),
+                         target  = c(top_mRNA_down,top_mRNA_up),
+                         table   = "validated",
+                         summary = TRUE,
+                         predicted.cutoff.type = "p",
+                         predicted.cutoff      = 20,
+                         use.tibble = TRUE)
+mlt_int_pred <- get_multimir(org     = "hsa",
+                         mirna   = c(top_miRNA_up, top_miRNA_down),
+                         target  = c(top_mRNA_down,top_mRNA_up),
+                         table   = "predicted",
+                         summary = TRUE,
+                         predicted.cutoff.type = "p",
+                         predicted.cutoff      = 20,
+                         use.tibble = TRUE)
+inter_tbl <- mlt_int@data  %>% 
+  group_by(mature_mirna_id, target_symbol) %>% 
+  distinct(mature_mirna_id, target_ensembl) %>% 
+  mutate(symbol = case_when(
+    nchar(target_symbol) == 0 ~ target_ensembl,
+    TRUE ~ target_symbol))
+inter_tbl_pred <- mlt_int_pred@data  %>% 
+  group_by(mature_mirna_id, target_symbol) %>% 
+  distinct(mature_mirna_id, target_ensembl) %>% 
+  mutate(symbol = case_when(
+    nchar(target_symbol) == 0 ~ target_ensembl,
+    TRUE ~ target_symbol))
+inter_tbl <- inter_tbl %>% 
+  bind_rows(inter_tbl_pred) %>% 
+  distinct()
+  
+write.table(inter_tbl, here::here("long_infection_human_reads/integrated analysis/results/network/multimir miRNA-RUVsmRNA WTvsN validated interactions combined search_updated.txt"), sep = "\t", row.names = F, quote = F)
+```
+
+
+```{r combined-search-att-tbl}
+#Now we can make a table with attributes (gene species, and expression up, or down)
+top_mrna <-  inter_tbl %>% 
+  ungroup() %>% 
+  dplyr::select(geneid = target_ensembl, symbol) %>% 
+  mutate(species = "mrna") %>% 
+  filter(!duplicated(symbol))
+top_genes <- inter_tbl %>% 
+  ungroup() %>% 
+  dplyr::select(geneid = mature_mirna_id) %>% 
+  mutate(species = "mirna", 
+         symbol = geneid) %>% 
+  filter(!duplicated(symbol)) %>% 
+  bind_rows(top_mrna) %>% 
+  mutate(express = case_when(
+    geneid %in% c(top_miRNA_up,top_mRNA_up) ~ "up",
+    geneid %in% c(top_miRNA_down,top_mRNA_down) ~ "down",
+  ))
+#Create a mapping for ID to genetype
+geneids <- mapIds(org.Hs.eg.db, keys = top_genes$geneid, 
+                  keytype = "ENSEMBL", column = "GENETYPE", multiVals = "first") %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "geneid") %>% 
+  dplyr::rename("biotype" = ".")
+
+m_res_ensembl <- m_res %>% 
+  mutate(Gene.ID = str_remove(Gene.ID,"\\.[1-9]([0-9])?"))
+top_genes_expr <- top_genes %>% 
+  left_join(dplyr::select(mi_res,Mature.miRNA,lfc =log2FoldChange.WTvsN),by = c("geneid" = "Mature.miRNA")) %>% 
+  left_join(dplyr::select(m_res_ensembl,Gene.ID,lfc =log2FoldChange.WTvsN),by = c("geneid" = "Gene.ID")) %>% 
+  mutate(lfc = case_when(
+    is.na(lfc.y) ~ lfc.x,
+    is.na(lfc.x) ~ lfc.y
+  ), .keep = "unused")
+#write.table(top_genes_expr, here::here("long_infection_human_reads/integrated analysis/results/network/attribute table for combined miRNA-RUVs mRNA_updated.txt"), sep = "\t", row.names = F, quote = F)
+```
+
+Read in the pathway collection information
+```{r clusterprofiler}
+#Read in set c5 from molecular signatures database - https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp#H
+#Biological pathway only
+c5 <- read.gmt(here::here("long_infection_human_reads/integrated analysis/data/c5.go.bp.v7.5.1.symbols.gmt"))
+h <- read.gmt(here::here("long_infection_human_reads/integrated analysis/data/h.all.v7.5.1.symbols.gmt"))
+c2 <- read.gmt(here::here("long_infection_human_reads/integrated analysis/data/c2.cp.kegg.v7.5.1.symbols.gmt"))
+```
+
+```{r cluster-prof-2, fig.width=8, fig.height=6}
+#Map miRNA genes to their symbols
+#Create a mapping for miRNA ID to symbol
+#Prepare a mart object for mapping miRNA names to 
+mart <- useEnsembl(dataset = "hsapiens_gene_ensembl", biomart='ensembl')
+mirs <- top_genes [top_genes$species == "mirna",] $geneid %>% str_remove("-.p") %>% str_to_lower()
+annot <- getBM(attributes=c('hgnc_symbol','mirbase_id'), filters='mirbase_id', values=mirs, mart=mart) %>% 
+  filter(nchar(hgnc_symbol) != 0)
+
+#Apply nice miRNA symbols to the top genes table
+top_genes_symbol <- top_genes_expr %>% 
+  mutate(symbol1 = case_when(
+           species == "mirna" ~ str_to_lower(str_remove(geneid,"-.p")),
+           TRUE ~ symbol
+         )) %>% 
+  left_join(annot, by = c("symbol1" = "mirbase_id")) %>% 
+  mutate(symbol = case_when(
+    !is.na(hgnc_symbol) ~ hgnc_symbol,
+    TRUE ~ symbol
+  )) %>% 
+  dplyr::select(-symbol1,-hgnc_symbol) %>% 
+  arrange(-(lfc))
+gl <- set_names(top_genes_symbol$lfc, nm = top_genes_symbol$symbol)
+#Prepare the universe for enrichment analysis
+#Create a list of background genes detected in the experiment
+annot.bg.mir <- getBM(attributes=c('hgnc_symbol','mirbase_id'), filters='mirbase_id', values=mi_res$Precursor.miRNA, mart=mart) %>% 
+  filter(nchar(hgnc_symbol) != 0)
+annot.bg.m <- mapIds(org.Hs.eg.db, keys = str_remove(m_res$Gene.ID,"\\.[1-9]([0-9])?"), 
+                  keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first") %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "geneid") %>% 
+  dplyr::rename("symbol" = ".") %>% 
+  filter(!is.na(symbol))
+ora <- vector(mode = "list",length = 3)
+sets <- list(h,c2,c5)
+for (i in 1:length(ora)) {
+  ora [[i]] <- enricher(top_genes_symbol$symbol, 
+                        TERM2GENE = sets [[i]], universe = c(annot.bg.m$symbol,annot.bg.mir$hgnc_symbol))
+}
+ora_suc <- ora %>% 
+  keep(~nrow(.)>0)
+#print results into tables
+h_df <- as.data.frame(ora_suc [[1]])
+h_df_parsed <- h_df %>% 
+  mutate(GeneRatio = DOSE::parse_ratio(GeneRatio)) %>% 
+  mutate(ID = str_remove(ID, "HALLMARK_"),
+         ID = str_replace_all(ID,"_"," "),
+         ID = str_wrap(ID, width = 20),
+         ID = fct_reorder(ID, GeneRatio)
+         )
+#write_csv(h_df, file = here::here("long_infection_human_reads/integrated analysis/results/tables/halmark enrichment of miRNA-mRNA network_updated.csv"))
+```
+
+
+```{r cluster-prof-2-print, fig.width=7, fig.height=5}
+
+p_dot <- ggplot(h_df_parsed, aes(x = GeneRatio, y = ID, color = p.adjust, size = Count)) +
+  geom_point() + 
+  scale_color_gradient(high = chosen_cont_colors [1], low = chosen_cont_colors [4],
+                       breaks = c(0.01, 0.02), limits = c(0,0.025)) + 
+  scale_size(range = c(7,12), breaks = c(8,14)) + 
+  expand_limits(x = c(0.1, 0.25)) + 
+  labs(color = "Adjusted p-value", y = element_blank(), size = "Gene Count") + 
+  theme_bw(base_size = 14) +
+  theme(legend.text = element_text(size = 14),
+        legend.title = element_text(size = 15),
+        axis.text.x = element_text(color = "black", size = 15),
+                       axis.text.y = element_text(color = "black", size = 15))
+p_dot
+#ggsave(filename = here::here("long_infection_human_reads/integrated analysis/results/clusterprofiler WTvsN combined search ora analysis with defined background list.svg"), plot = p_dot, width = 7, height = 5)
+#ggsave(filename = here::here("long_infection_human_reads/integrated analysis/results/clusterprofiler WTvsN combined search ora analysis with defined background list.png"), plot = p_dot, width = 7, height = 5, dpi = 1080)
+```
+
+
+```{r cluster-prof-2-print-heatplot, fig.width=8, fig.height=5}
+p_heat <- heatplot(ora_suc [[1]], foldChange=gl) + 
+        scale_fill_gradient2(high = carto_pal(7,diverg_pal_choice) [7],
+                             low =  carto_pal(7,diverg_pal_choice) [1],
+                             mid =  carto_pal(7,diverg_pal_choice) [4],
+                             midpoint = 0,
+                             name = bquote(Log[2] ~ "Fold Change")) +
+  theme(legend.text = element_text(size = 14),
+        legend.title = element_text(size = 15),
+        axis.text.x = element_text(color = "black", size = 7))
+p_heat
+#ggsave(here::here("long_infection_human_reads/integrated analysis/results/clusterprofiler WTvsN combined search ora analysis heatplot_updated.png"), plot = p_heat, width = 8, height = 5)
+```
+
+Add annotation to the network to see if there is anything potentially interesting there
+```{r function-annot}
+#Get all the genes in neat vectors
+func_vector <- h_df_parsed %>% 
+  select(ID, geneID) %>% 
+  separate_rows(geneID, sep = "/")
+  
+top_genes_expr_func <- top_genes_expr %>% 
+  left_join(func_vector, by = c("symbol" = "geneID"))
+top_genes_expr_func_sum <- top_genes_expr_func %>% 
+  summarise(funcID = str_c(ID, collapse = "_"), .by = -ID)
+#write.table(top_genes_expr_func_sum, here::here("long_infection_human_reads/integrated analysis/results/network/attribute table for combined miRNA-RUVs mRNA.txt"), sep = "\t", row.names = F, quote = F)
+```
+
