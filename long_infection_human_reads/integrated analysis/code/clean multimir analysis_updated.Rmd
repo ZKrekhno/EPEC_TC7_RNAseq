@@ -173,7 +173,7 @@ inter_tbl <- inter_tbl %>%
   bind_rows(inter_tbl_pred) %>% 
   distinct()
   
-write.table(inter_tbl, here::here("long_infection_human_reads/integrated analysis/results/network/multimir miRNA-RUVsmRNA WTvsN validated interactions combined search_updated.txt"), sep = "\t", row.names = F, quote = F)
+#write.table(inter_tbl, here::here("long_infection_human_reads/integrated analysis/results/network/multimir miRNA-RUVsmRNA WTvsN validated interactions combined search_updated.txt"), sep = "\t", row.names = F, quote = F)
 ```
 
 
@@ -321,7 +321,10 @@ func_vector <- h_df_parsed %>%
 top_genes_expr_func <- top_genes_expr %>% 
   left_join(func_vector, by = c("symbol" = "geneID"))
 top_genes_expr_func_sum <- top_genes_expr_func %>% 
+  mutate(ID = fct_relevel(ID, "TNFA SIGNALING VIA\nNFKB", "IL2 STAT5 SIGNALING")) %>% 
+  arrange(ID) %>% 
+  distinct(symbol, .keep_all = T)
   summarise(funcID = str_c(ID, collapse = "_"), .by = -ID)
-#write.table(top_genes_expr_func_sum, here::here("long_infection_human_reads/integrated analysis/results/network/attribute table for combined miRNA-RUVs mRNA.txt"), sep = "\t", row.names = F, quote = F)
+#write.table(top_genes_expr_func_sum, here::here("long_infection_human_reads/integrated analysis/results/network/attribute table for combined miRNA-RUVs mRNA_updated_with_function.txt"), sep = "\t", row.names = F, quote = F)
 ```
 
