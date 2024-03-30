@@ -1,2 +1,0 @@
-ID,Description,GeneRatio,BgRatio,pvalue,p.adjust,qvalue,geneID,Count
-ecg05130,Pathogenic Escherichia coli infection,4/15,24/1318,1.0126756968800965e-4,0.0018228162543841736,0.001598961626652784,E2348C_1044/E2348C_1041/E2348C_0723/E2348C_3951,4
